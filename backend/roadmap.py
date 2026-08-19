@@ -126,6 +126,8 @@ def get_roadmap(career: str, csv_path: str = SKILL_ROADMAP_CSV) -> List[str]:
 
 def print_roadmap(career: str, csv_path: str = SKILL_ROADMAP_CSV) -> None:
     """Prints the roadmap as a numbered list, matching the expected output format."""
+    print(f"Roadmap for : {career}\n")
+
     skills = get_roadmap(career, csv_path)
     for i, skill in enumerate(skills, start=1):
         print(f"{i}. {skill}")

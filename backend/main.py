@@ -1,11 +1,11 @@
 from recommender import recommend_career
 from roadmap import print_roadmap
-
-print_roadmap("Data Scientist")
+career_name = "cybersecurity analyst"
+print_roadmap(career_name)
 skills = ["Python", "Pandas"]
-interest = "Data Science"
+interest = career_name
 
-result = recommend_career(skills, interest, top_n=1)[0]
+result = recommend_career(skills, career_name,top_n=10)[0]
 
 print(f"Career: {result['career']}")
 print(f"Match Score: {result['match_percent']}%")

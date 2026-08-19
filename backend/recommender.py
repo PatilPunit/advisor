@@ -225,7 +225,7 @@ def recommend_top_career(skills: List[str], interest: Optional[str] = None) -> d
 # --------------------------------------------------------------------------
 # CLI demo / manual test
 # --------------------------------------------------------------------------
-
+"""
 if __name__ == "__main__":
     demo_skills = ["Python", "Pandas"]
     demo_interest = "data"
@@ -241,3 +241,4 @@ if __name__ == "__main__":
               f"(matched: {rec['matched_skills']} | missing: {rec['missing_skills']})")
         print(f"    Interest Relevance: {rec['interest_score']}%")
         print(f"    Suggested project: {rec['beginner_project']} -> {rec['advanced_project']}\n")
+"""
