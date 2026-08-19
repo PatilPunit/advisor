@@ -1,5 +1,7 @@
 from recommender import recommend_career
+from roadmap import print_roadmap
 
+print_roadmap("Data Scientist")
 skills = ["Python", "Pandas"]
 interest = "Data Science"
 
