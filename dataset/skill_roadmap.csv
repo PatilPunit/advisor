@@ -1,0 +1,51 @@
+career,order,skill
+Data Scientist,1,Python
+Data Scientist,2,NumPy
+Data Scientist,3,Pandas
+Data Scientist,4,Data Visualization
+Data Scientist,5,Statistics
+Data Scientist,6,Machine Learning
+ML Engineer,1,Python
+ML Engineer,2,NumPy
+ML Engineer,3,Pandas
+ML Engineer,4,Machine Learning
+ML Engineer,5,Deep Learning
+ML Engineer,6,TensorFlow/PyTorch
+ML Engineer,7,Model Deployment
+Data Analyst,1,Excel
+Data Analyst,2,SQL
+Data Analyst,3,Pandas
+Data Analyst,4,Data Visualization
+Data Analyst,5,Power BI
+Data Analyst,6,Business Storytelling
+Full Stack Developer,1,HTML
+Full Stack Developer,2,CSS
+Full Stack Developer,3,JavaScript
+Full Stack Developer,4,React
+Full Stack Developer,5,Node.js
+Full Stack Developer,6,Databases
+Full Stack Developer,7,Deployment
+Cyber Security Analyst,1,Networking Basics
+Cyber Security Analyst,2,Linux
+Cyber Security Analyst,3,Security Fundamentals
+Cyber Security Analyst,4,Cryptography
+Cyber Security Analyst,5,Penetration Testing
+Cyber Security Analyst,6,SIEM Tools
+Android Developer,1,Java
+Android Developer,2,Kotlin
+Android Developer,3,XML Layouts
+Android Developer,4,Android Studio
+Android Developer,5,SQLite
+Android Developer,6,APIs and Networking
+Cloud Engineer,1,Linux
+Cloud Engineer,2,Networking
+Cloud Engineer,3,AWS or GCP Basics
+Cloud Engineer,4,Docker
+Cloud Engineer,5,IAM and Security
+Cloud Engineer,6,CI/CD
+AI Engineer,1,Python
+AI Engineer,2,Machine Learning
+AI Engineer,3,Deep Learning
+AI Engineer,4,NLP
+AI Engineer,5,Model Deployment
+AI Engineer,6,MLOps
