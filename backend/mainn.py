@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from recommender import recommend_career
 from roadmap import get_roadmap
-from project_bank import get_projects_for_career
+from project import get_projects_for_career
 
 app = FastAPI(title="AI Career Advisor")
 
