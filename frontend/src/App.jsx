@@ -4,6 +4,7 @@ import CareerCard from "./components/CareerCard";
 import Skillgapcard from "./components/Skillgapcard";
 import RoadmapCard from "./components/RoadmapCard";
 import ProjectCard from "./components/ProjectCard";
+import ResumeUpload from "./components/ResumeUpload";
 
 function App() {
   const [result, setResult] = useState(null);
@@ -13,6 +14,8 @@ function App() {
       <h1 style={styles.title}>AI Career Advisor</h1>
 
       <SkillForm onResult={setResult} />
+
+      <ResumeUpload />
 
       {result && (
         <div style={styles.results}>
