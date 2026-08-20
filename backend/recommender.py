@@ -32,7 +32,7 @@ from typing import List, Optional
 # --------------------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CAREER_PATHS_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/career_paths.csv")
+CAREER_PATHS_CSV = os.path.join(BASE_DIR, "dataset", "career_paths.csv")
 
 # Below this similarity ratio, two skill strings are considered different
 # (handles typos / minor variations like "JS" vs "Javascript" NOT matching
@@ -50,6 +50,7 @@ class CareerMatch:
     match_percent: float
     matched_skills: List[str]
     missing_skills: List[str]
+    required_skills: List[str]
     interest_score: float
     final_score: float
     beginner_project: str = ""
@@ -61,6 +62,7 @@ class CareerMatch:
             "match_percent": round(self.match_percent, 2),
             "matched_skills": self.matched_skills,
             "missing_skills": self.missing_skills,
+            "required_skills": self.required_skills,
             "interest_score": round(self.interest_score, 2),
             "final_score": round(self.final_score, 2),
             "beginner_project": self.beginner_project,
@@ -212,6 +214,7 @@ def recommend_career(
             match_percent=match_percent,
             matched_skills=matched,
             missing_skills=missing,
+            required_skills=c["required_skills"],
             interest_score=interest_score,
             final_score=final_score,
             beginner_project=c["beginner_projects"],
