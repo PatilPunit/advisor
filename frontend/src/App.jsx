@@ -1,7 +1,7 @@
 import { useState } from "react";
 import SkillForm from "./components/SkillForm";
 import CareerCard from "./components/CareerCard";
-import Skillgapcard from "./components/Skillgapcard";
+import SkillGapCard from "./components/SkillGapCard";
 import RoadmapCard from "./components/RoadmapCard";
 import ProjectCard from "./components/ProjectCard";
 import ResumeUpload from "./components/ResumeUpload";
@@ -34,7 +34,7 @@ function App() {
           </section>
 
           <section>
-            <Skillgapcard
+            <SkillGapCard
               requiredSkills={result.required_skills}
               userSkills={result.user_skills}
             />

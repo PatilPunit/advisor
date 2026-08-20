@@ -17,7 +17,7 @@ import re
 from typing import List, Set
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend/
-CAREER_PATHS_CSV = os.path.join(BASE_DIR, "dataset", "career_paths.csv")
+CAREER_PATHS_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/career_paths.csv")
 
 
 def _load_skill_vocabulary(csv_path: str = CAREER_PATHS_CSV) -> List[str]:
