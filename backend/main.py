@@ -2,7 +2,7 @@ from recommender import recommend_career
 from roadmap import print_roadmap
 
 career_name = "cybersecurity analyst"
-skills = ["Python", "Pandas"]
+skills = ["Python", "React","SQL", "MLOps", "Cloud Security"]
 interest = career_name
 
 results = recommend_career(skills, interest, top_n=3)

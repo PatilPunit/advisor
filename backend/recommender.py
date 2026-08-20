@@ -32,7 +32,7 @@ from typing import List, Optional
 # --------------------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CAREER_PATHS_CSV = os.path.join(BASE_DIR, "dataset", "career_paths.csv")
+CAREER_PATHS_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/career_paths.csv")
 
 # Below this similarity ratio, two skill strings are considered different
 # (handles typos / minor variations like "JS" vs "Javascript" NOT matching
