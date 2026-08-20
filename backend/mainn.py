@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from recommender import recommend_career
@@ -8,6 +9,16 @@ from roadmap import get_roadmap
 from project import get_projects_for_career
 
 app = FastAPI(title="AI Career Advisor")
+
+# Allow the Vite dev server (and any origin, for now) to call this API.
+# Tighten allow_origins to your real frontend URL before deploying.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # --------------------------------------------------------------------------
