@@ -32,7 +32,7 @@ from typing import List, Optional
 # --------------------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CAREER_PATHS_CSV = "/home/punit/Downloads/Mint/AI_career_advisor/dataset/career_paths.csv"
+CAREER_PATHS_CSV = os.path.join(BASE_DIR, "dataset", "career_paths.csv")
 
 # Below this similarity ratio, two skill strings are considered different
 # (handles typos / minor variations like "JS" vs "Javascript" NOT matching
@@ -75,6 +75,14 @@ class CareerMatch:
 def _normalize(text: str) -> str:
     """Lowercase + strip, used for consistent skill comparison."""
     return text.strip().lower()
+
+
+def _normalize_loose(text: str) -> str:
+    """
+    Like _normalize, but also strips spaces/hyphens so 'cybersecurity'
+    correctly matches 'Cyber Security' / 'cyber-security' style variants.
+    """
+    return "".join(ch for ch in _normalize(text) if ch.isalnum())
 
 
 def _load_career_data(csv_path: str = CAREER_PATHS_CSV) -> List[dict]:
@@ -144,16 +152,16 @@ def _compute_interest_score(interest: Optional[str], career: str, required_skill
     if not interest:
         return 0.0
 
-    interest_n = _normalize(interest)
-    haystack = _normalize(career) + " " + " ".join(_normalize(s) for s in required_skills)
+    interest_loose = _normalize_loose(interest)
+    haystack_loose = _normalize_loose(career + " " + " ".join(required_skills))
 
-    if interest_n in haystack:
+    if interest_loose and interest_loose in haystack_loose:
         return 100.0
 
     # fuzzy fallback: check similarity against career name and each skill
     tokens = [career] + required_skills
     best_ratio = max(
-        difflib.SequenceMatcher(None, interest_n, _normalize(t)).ratio()
+        difflib.SequenceMatcher(None, interest_loose, _normalize_loose(t)).ratio()
         for t in tokens
     )
     return round(best_ratio * 100, 2)
@@ -210,8 +218,21 @@ def recommend_career(
             advanced_project=c["advanced_projects"],
         ))
 
-    # Rank by final_score, tie-break by match_percent
-    results.sort(key=lambda r: (r.final_score, r.match_percent), reverse=True)
+    # If the user's stated interest EXACTLY names a career (e.g. interest=
+    # "cybersecurity analyst" -> "Cyber Security Analyst"), that career must
+    # rank first. A stated career goal should never be outranked by unrelated
+    # skill overlap — skill_match still matters, but only to order ties and
+    # to show the user how ready they are (via missing_skills), not to
+    # override their stated intent.
+    EXACT_INTEREST_MATCH = 100.0
+    results.sort(
+        key=lambda r: (
+            r.interest_score >= EXACT_INTEREST_MATCH,  # exact-match careers first
+            r.final_score,
+            r.match_percent,
+        ),
+        reverse=True,
+    )
 
     return [r.to_dict() for r in results[:top_n]]
 
@@ -225,7 +246,7 @@ def recommend_top_career(skills: List[str], interest: Optional[str] = None) -> d
 # --------------------------------------------------------------------------
 # CLI demo / manual test
 # --------------------------------------------------------------------------
-"""
+
 if __name__ == "__main__":
     demo_skills = ["Python", "Pandas"]
     demo_interest = "data"
@@ -241,4 +262,3 @@ if __name__ == "__main__":
               f"(matched: {rec['matched_skills']} | missing: {rec['missing_skills']})")
         print(f"    Interest Relevance: {rec['interest_score']}%")
         print(f"    Suggested project: {rec['beginner_project']} -> {rec['advanced_project']}\n")
-"""
