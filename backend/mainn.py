@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from recommender import recommend_career
 from roadmap import get_roadmap
-from project_bank import get_projects_for_career
+from project import get_projects_for_career
 from resume.parser import extract_text_from_pdf
 from resume.extractor import extract_skills
 from resume.scorer import calculate_score
