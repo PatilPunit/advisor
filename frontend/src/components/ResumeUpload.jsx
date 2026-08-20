@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 
-function ResumeUpload() {
+function ResumeUpload({ userId }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -31,6 +31,9 @@ function ResumeUpload() {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
+      if (userId) {
+        formData.append("user_id", userId);
+      }
 
       const response = await fetch("http://127.0.0.1:8000/resume-analyze", {
         method: "POST",
