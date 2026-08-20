@@ -24,7 +24,7 @@ function SkillForm({ onResult }) {
       .filter(Boolean);
 
     if (skills.length === 0) {
-      setError("Enter at least one skill, e.g. Python, Pandas, SQL");
+      setError("Please enter at least one skill.");
       return;
     }
 
@@ -98,20 +98,24 @@ const styles = {
     gap: "10px",
     maxWidth: "420px",
     padding: "20px",
-    border: "1px solid #ddd",
+    border: "1px solid #2a2a2a",
     borderRadius: "10px",
     fontFamily: "sans-serif",
+    backgroundColor: "#161616",
   },
   label: {
     fontSize: "14px",
     fontWeight: 600,
     marginTop: "8px",
+    color: "#ccc",
   },
   input: {
     padding: "10px",
     fontSize: "14px",
     borderRadius: "6px",
-    border: "1px solid #ccc",
+    border: "1px solid #333",
+    backgroundColor: "#0d0d0d",
+    color: "#f5f5f5",
   },
   button: {
     marginTop: "12px",
@@ -125,7 +129,7 @@ const styles = {
     cursor: "pointer",
   },
   error: {
-    color: "#dc2626",
+    color: "#f87171",
     fontSize: "13px",
     margin: 0,
   },
