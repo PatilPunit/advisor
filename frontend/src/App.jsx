@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import AuthForm from "./components/AuthForm";
 import GoalForm from "./components/GoalForm";
 import Dashboard from "./components/Dashboard";
+import SkillTracker from "./components/SkillTracker";
 import SkillForm from "./components/SkillForm";
 import CareerCard from "./components/CareerCard";
 import SkillGapCard from "./components/SkillGapCard";
@@ -43,6 +44,7 @@ function App() {
       ) : (
         <>
           <GoalForm userId={user.id} currentGoal={null} onGoalSet={refreshDashboard} />
+          <SkillTracker key={dashboardKey} userId={user.id} onProgressChange={refreshDashboard} />
           <Dashboard key={dashboardKey} userId={user.id} />
           <ResumeUpload userId={user.id} />
         </>
