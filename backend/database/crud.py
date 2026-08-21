@@ -75,9 +75,14 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
 
 def set_career_goal(db: Session, user_id: int, career: str) -> User:
     """
-    Sets the user's career goal and seeds their roadmap skills + projects
-    (if not already seeded) so progress can be tracked against real data
-    from skill_roadmap.csv and career_paths.csv.
+    Sets the user's career goal and syncs their roadmap skills to match it.
+
+    If the user previously had a different career goal, skills that belong
+    ONLY to the old roadmap are removed (so switching goals doesn't leave a
+    mixed, ambiguous checklist combining two different careers). Skills that
+    are shared between the old and new roadmap (e.g. "Python" appears in
+    almost every career) keep their completed status - only truly unrelated
+    old skills are dropped, and new required skills are added as unchecked.
     """
     user = get_user(db, user_id)
     if not user:
@@ -85,12 +90,20 @@ def set_career_goal(db: Session, user_id: int, career: str) -> User:
 
     user.career_goal = career
 
-    # Seed roadmap skills, only for skills not already tracked for this user
-    existing_skill_names = {
-        s.skill_name.lower() for s in db.query(UserSkill).filter(UserSkill.user_id == user_id)
-    }
-    for skill in get_roadmap(career):
-        if skill.lower() not in existing_skill_names:
+    new_roadmap = get_roadmap(career)
+    new_roadmap_lower = {s.lower() for s in new_roadmap}
+
+    existing_rows = db.query(UserSkill).filter(UserSkill.user_id == user_id).all()
+    existing_by_name = {row.skill_name.lower(): row for row in existing_rows}
+
+    # Remove rows that belong to a different (old) career's roadmap only
+    for name_lower, row in existing_by_name.items():
+        if name_lower not in new_roadmap_lower:
+            db.delete(row)
+
+    # Add any new-career skills the user doesn't already have tracked
+    for skill in new_roadmap:
+        if skill.lower() not in existing_by_name:
             db.add(UserSkill(user_id=user_id, skill_name=skill, completed=False))
 
     db.commit()

@@ -44,8 +44,8 @@ function App() {
       ) : (
         <>
           <GoalForm userId={user.id} currentGoal={null} onGoalSet={refreshDashboard} />
-          <SkillTracker key={dashboardKey} userId={user.id} onProgressChange={refreshDashboard} />
-          <Dashboard key={dashboardKey} userId={user.id} />
+          <SkillTracker key={`tracker-${dashboardKey}`} userId={user.id} onProgressChange={refreshDashboard} />
+          <Dashboard key={`dashboard-${dashboardKey}`} userId={user.id} />
           <ResumeUpload userId={user.id} />
         </>
       )}
