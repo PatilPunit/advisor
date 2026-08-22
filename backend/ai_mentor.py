@@ -35,7 +35,7 @@ from typing import Dict, List, Optional
 import requests
 
 from recommender import recommend_career
-from project_bank import get_project_details
+from project import get_project_details
 from skills_vocab import load_master_vocabulary, find_skills_in_text
 
 CAREER_NAMES = [
