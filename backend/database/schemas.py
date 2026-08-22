@@ -118,3 +118,99 @@ class DashboardResponse(BaseModel):
     total_projects: int
     roadmap_progress: float
     resume_history: List[ResumeHistoryOut]
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - AI Mentor
+# --------------------------------------------------------------------------
+
+class MentorChatRequest(BaseModel):
+    question: str
+    user_id: Optional[int] = None
+
+
+class MentorChatResponse(BaseModel):
+    answer: str
+    recommended_career: Optional[str] = None
+    possessed_skills: List[str] = []
+    missing_skills: List[str] = []
+    suggested_project: Optional[str] = None
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Dynamic Roadmap
+# --------------------------------------------------------------------------
+
+class DynamicRoadmapRequest(BaseModel):
+    career: str
+    known_skills: List[str]
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Career Probability Engine
+# --------------------------------------------------------------------------
+
+class CareerProbability(BaseModel):
+    career: str
+    probability: float
+
+
+class CareerProbabilityRequest(BaseModel):
+    skills: List[str]
+    user_id: Optional[int] = None
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Job Matching
+# --------------------------------------------------------------------------
+
+class JobMatchResponse(BaseModel):
+    match_score: int
+    missing_keywords: List[str]
+    recommended_actions: List[str]
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Project Generator
+# --------------------------------------------------------------------------
+
+class ProjectGeneratorRequest(BaseModel):
+    domain: str
+    level: str
+    user_id: Optional[int] = None
+
+
+class ProjectGeneratorResponse(BaseModel):
+    project_name: str
+    domain: str
+    difficulty: str
+    dataset: str
+    skills: List[str]
+    timeline: str
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Learning Time Predictor
+# --------------------------------------------------------------------------
+
+class LearningTimeRequest(BaseModel):
+    career: str
+    current_skills: List[str]
+
+
+class LearningTimeResponse(BaseModel):
+    estimated_duration: str
+    weekly_hours: int
+    difficulty: str
+    remaining_skills: List[str]
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Analytics Dashboard
+# --------------------------------------------------------------------------
+
+class AnalyticsSummaryResponse(BaseModel):
+    most_chosen_career: Optional[str]
+    most_missing_skill: Optional[str]
+    average_resume_score: Optional[float]
+    daily_active_users: int
