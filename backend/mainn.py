@@ -6,18 +6,21 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from recommender import recommend_career
-from roadmap import get_roadmap
+from roadmap import get_roadmap, generate_dynamic_roadmap
 from project import get_projects_for_career
 from resume.parser import extract_text_from_pdf
 from resume.extractor import extract_skills
 from resume.scorer import calculate_score
+from resume.intelligence import evaluate_resume
+
+from ai_mentor import answer_career_question
+from job_match import extract_job_skills, match_resume_to_job
+from project_generator import generate_project
+from learning_time import estimate_learning_time
 
 from database.db import Base, engine, get_db
 from database import crud, schemas
 
-# Creates all tables (users, user_skills, user_projects, resume_history)
-# if they don't already exist. Safe to call every startup - it won't
-# touch tables that already exist.
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AI Career Advisor")
@@ -38,6 +41,7 @@ app.add_middleware(
 class RecommendRequest(BaseModel):
     skills: List[str] = Field(..., example=["Python", "Pandas"])
     interest: Optional[str] = Field(None, example="cybersecurity analyst")
+    user_id: Optional[int] = None
 
 
 class TopMatch(BaseModel):
@@ -61,10 +65,13 @@ class ResumeAnalyzeResponse(BaseModel):
     skills: List[str]
     missing: List[str]
     recommended_career: str
+    intelligence_score: int
+    weaknesses: List[str]
+    structural_strengths: List[str]
 
 
 # --------------------------------------------------------------------------
-# Routes: Phase 4/6 (unchanged)
+# Routes: Phase 4/6
 # --------------------------------------------------------------------------
 
 @app.get("/")
@@ -73,7 +80,7 @@ def home():
 
 
 @app.post("/recommend", response_model=RecommendResponse)
-def recommend(request: RecommendRequest):
+def recommend(request: RecommendRequest, db: Session = Depends(get_db)):
     if not request.skills:
         raise HTTPException(status_code=400, detail="skills list cannot be empty")
 
@@ -87,6 +94,11 @@ def recommend(request: RecommendRequest):
     top_matches = [
         TopMatch(career=r["career"], score=round(r["match_percent"])) for r in results[:3]
     ]
+
+    # Phase 10: log this recommendation for analytics (Most Chosen Career / Most Missing Skill)
+    crud.log_career_recommendation(
+        db, request.user_id, top["career"], top["match_percent"], top["missing_skills"]
+    )
 
     return RecommendResponse(
         career=top["career"],
@@ -134,31 +146,35 @@ async def resume_analyze(
 
     score_result = calculate_score(detected_skills, required_skills)
 
-    # STEP 12: if the request came from a logged-in user, save this score
-    # to their resume_history so they can see improvement over time.
+    # Phase 10: Resume Intelligence Engine - structural evaluation
+    intelligence = evaluate_resume(resume_text, score_result["score"])
+
     if user_id is not None:
         user = crud.get_user(db, user_id)
         if user is None:
             raise HTTPException(status_code=404, detail=f"No user with id {user_id}")
-        crud.add_resume_score(db, user_id, score_result["score"])
+        crud.add_resume_score(db, user_id, intelligence["score"])
+    crud.log_resume_analyze_activity(db, user_id)
 
     return ResumeAnalyzeResponse(
         score=score_result["score"],
         skills=detected_skills,
         missing=score_result["missing"],
         recommended_career=recommended_career,
+        intelligence_score=intelligence["score"],
+        weaknesses=intelligence["weaknesses"],
+        structural_strengths=intelligence["structural_strengths"],
     )
 
 
 # --------------------------------------------------------------------------
-# Routes: Phase 8 - Auth
+# Routes: Auth
 # --------------------------------------------------------------------------
 
 @app.post("/register", response_model=schemas.UserOut)
 def register(request: schemas.UserCreate, db: Session = Depends(get_db)):
     if crud.get_user_by_email(db, request.email):
         raise HTTPException(status_code=400, detail="An account with this email already exists")
-
     user = crud.create_user(db, request.name, request.email, request.password)
     return user
 
@@ -168,12 +184,11 @@ def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = crud.authenticate_user(db, request.email, request.password)
     if not user:
         return schemas.LoginResponse(success=False, message="Invalid email or password")
-
     return schemas.LoginResponse(success=True, user_id=user.id, name=user.name)
 
 
 # --------------------------------------------------------------------------
-# Routes: Phase 8 - Career goal, skills, projects
+# Routes: Career goal, skills, projects
 # --------------------------------------------------------------------------
 
 @app.post("/users/{user_id}/goal", response_model=schemas.UserOut)
@@ -205,10 +220,6 @@ def update_project(user_id: int, request: schemas.ProjectUpdateRequest, db: Sess
     return crud.update_project_completion(db, user_id, request.project_name, request.completed)
 
 
-# --------------------------------------------------------------------------
-# Routes: Phase 8 - STEP 13 Dashboard
-# --------------------------------------------------------------------------
-
 @app.get("/dashboard/{user_id}", response_model=schemas.DashboardResponse)
 def dashboard(user_id: int, db: Session = Depends(get_db)):
     try:
@@ -216,3 +227,143 @@ def dashboard(user_id: int, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return data
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Deliverable 1: AI Mentor
+# --------------------------------------------------------------------------
+
+@app.post("/mentor/chat", response_model=schemas.MentorChatResponse)
+def mentor_chat(request: schemas.MentorChatRequest, db: Session = Depends(get_db)):
+    if not request.question.strip():
+        raise HTTPException(status_code=400, detail="question cannot be empty")
+
+    # If logged in, factor in their already-completed roadmap skills too
+    user_skills: List[str] = []
+    if request.user_id is not None:
+        skills = crud.get_user_skills(db, request.user_id)
+        user_skills = [s.skill_name for s in skills if s.completed]
+
+    result = answer_career_question(request.question, user_skills=user_skills)
+
+    # Conversation memory: persist every question+answer
+    crud.log_mentor_chat(
+        db, request.user_id, request.question, result["answer"], result["recommended_career"]
+    )
+
+    return schemas.MentorChatResponse(**result)
+
+
+@app.get("/mentor/history/{user_id}")
+def mentor_history(user_id: int, db: Session = Depends(get_db)):
+    """Returns past mentor conversations for a logged-in user (conversation memory)."""
+    history = crud.get_mentor_history(db, user_id)
+    return [
+        {"question": h.question, "answer": h.answer, "created_at": h.created_at}
+        for h in history
+    ]
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Deliverable 2: Dynamic Roadmap Generator
+# --------------------------------------------------------------------------
+
+@app.post("/roadmap/dynamic")
+def dynamic_roadmap(request: schemas.DynamicRoadmapRequest):
+    try:
+        roadmap = generate_dynamic_roadmap(request.career, request.known_skills)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"career": request.career, "roadmap": roadmap}
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Deliverable 4: Resume vs Job Matching
+# --------------------------------------------------------------------------
+
+@app.post("/job-match", response_model=schemas.JobMatchResponse)
+async def job_match(
+    file: UploadFile = File(...),
+    job_description: str = Form(...),
+    user_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Please upload a .pdf file")
+
+    file_bytes = await file.read()
+    try:
+        resume_text = extract_text_from_pdf(file_bytes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    resume_skills = extract_skills(resume_text)
+    job_skills = extract_job_skills(job_description)
+
+    if not job_skills:
+        raise HTTPException(
+            status_code=422,
+            detail="No recognizable skills/keywords found in the job description.",
+        )
+
+    result = match_resume_to_job(resume_skills, job_skills)
+
+    crud.log_job_match(db, user_id, result["match_score"], result["missing_keywords"])
+
+    return schemas.JobMatchResponse(**result)
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Deliverable 5: Career Probability Engine
+# --------------------------------------------------------------------------
+
+@app.post("/career-probabilities", response_model=List[schemas.CareerProbability])
+def career_probabilities(request: schemas.CareerProbabilityRequest):
+    if not request.skills:
+        raise HTTPException(status_code=400, detail="skills list cannot be empty")
+
+    results = recommend_career(request.skills, None, top_n=8)
+    return [
+        schemas.CareerProbability(career=r["career"], probability=round(r["match_percent"], 1))
+        for r in results
+    ]
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Deliverable 6: AI Project Generator
+# --------------------------------------------------------------------------
+
+@app.post("/project-generator", response_model=schemas.ProjectGeneratorResponse)
+def project_generator(request: schemas.ProjectGeneratorRequest, db: Session = Depends(get_db)):
+    project = generate_project(request.domain, request.level)
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No project found for domain='{request.domain}', level='{request.level}'",
+        )
+
+    crud.log_project_recommendation(
+        db, request.user_id, project["project_name"], project["domain"], project["difficulty"]
+    )
+
+    return schemas.ProjectGeneratorResponse(**project)
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Deliverable 7: Learning Time Predictor
+# --------------------------------------------------------------------------
+
+@app.post("/learning-time", response_model=schemas.LearningTimeResponse)
+def learning_time(request: schemas.LearningTimeRequest):
+    result = estimate_learning_time(request.career, request.current_skills)
+    return schemas.LearningTimeResponse(**result)
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Deliverable 8: Analytics Dashboard
+# --------------------------------------------------------------------------
+
+@app.get("/analytics/summary", response_model=schemas.AnalyticsSummaryResponse)
+def analytics_summary(db: Session = Depends(get_db)):
+    data = crud.get_analytics_summary(db)
+    return schemas.AnalyticsSummaryResponse(**data)
