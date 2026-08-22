@@ -100,6 +100,33 @@ function ResumeUpload({ userId }) {
             Recommended Career: <strong>{result.recommended_career}</strong>
           </p>
 
+          <div style={styles.intelligenceRow}>
+            <span style={styles.intelligenceLabel}>Resume Intelligence Score</span>
+            <span style={styles.intelligenceValue}>{result.intelligence_score}/100</span>
+          </div>
+
+          {result.weaknesses.length > 0 && (
+            <div>
+              <h4 style={styles.skillHeading}>Improvement Suggestions</h4>
+              <ul style={styles.skillList}>
+                {result.weaknesses.map((w) => (
+                  <li key={w} style={styles.missingItem}>✗ {w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {result.structural_strengths.length > 0 && (
+            <div>
+              <h4 style={styles.skillHeading}>Structural Strengths</h4>
+              <ul style={styles.skillList}>
+                {result.structural_strengths.map((s) => (
+                  <li key={s} style={styles.detectedItem}>✓ {s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div style={styles.skillColumns}>
             <div>
               <h4 style={styles.skillHeading}>Detected Skills</h4>
@@ -225,6 +252,16 @@ const styles = {
     fontSize: "14px",
     color: "#f5f5f5",
     margin: 0,
+  },
+  intelligenceRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: "13px",
+    color: "#ccc",
+  },
+  intelligenceValue: {
+    fontWeight: 700,
+    color: "#facc15",
   },
   skillColumns: {
     display: "flex",
