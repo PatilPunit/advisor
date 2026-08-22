@@ -5,9 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-
 from recommender import recommend_career
-from roadmap1 import get_roadmap, generate_dynamic_roadmap
+from roadmap import get_roadmap, generate_dynamic_roadmap
 from project import get_projects_for_career
 from resume.parser import extract_text_from_pdf
 from resume.extractor import extract_skills
@@ -241,11 +240,20 @@ def mentor_chat(request: schemas.MentorChatRequest, db: Session = Depends(get_db
 
     # If logged in, factor in their already-completed roadmap skills too
     user_skills: List[str] = []
+    conversation_history = None
     if request.user_id is not None:
         skills = crud.get_user_skills(db, request.user_id)
         user_skills = [s.skill_name for s in skills if s.completed]
 
-    result = answer_career_question(request.question, user_skills=user_skills)
+        past_chats = crud.get_mentor_history(db, request.user_id)
+        if past_chats:
+            conversation_history = [
+                {"question": c.question, "answer": c.answer} for c in past_chats
+            ]
+
+    result = answer_career_question(
+        request.question, user_skills=user_skills, conversation_history=conversation_history
+    )
 
     # Conversation memory: persist every question+answer
     crud.log_mentor_chat(
