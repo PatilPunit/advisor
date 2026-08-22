@@ -31,7 +31,7 @@ from typing import List, Optional
 # --------------------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SKILL_ROADMAP_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/career_paths.csv")
+SKILL_ROADMAP_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/skill_roadmap.csv")
 
 FUZZY_MATCH_THRESHOLD = 0.8  # for tolerant career-name lookup (typos, casing)
 

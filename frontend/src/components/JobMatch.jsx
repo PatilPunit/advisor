@@ -28,7 +28,7 @@ function JobMatch({ userId }) {
       formData.append("job_description", jobDescription);
       if (userId) formData.append("user_id", userId);
 
-      const response = await fetch("http://127.0.0.1:8000/job-match", {
+      const response = await fetch("http://127.0.0.1:8000/job_match", {
         method: "POST",
         body: formData,
       });

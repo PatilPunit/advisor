@@ -31,29 +31,9 @@ from typing import List, Optional
 # --------------------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SKILL_ROADMAP_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/career_paths.csv")
+SKILL_ROADMAP_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/skill_roadmap.csv")
 
 FUZZY_MATCH_THRESHOLD = 0.8  # for tolerant career-name lookup (typos, casing)
-
-# Your dataset uses different naming in different places - career_paths.csv
-# abbreviates ("ML"), skill_roadmap.csv spells it out ("Machine Learning").
-# Without this map, a user who says they know "ML" would never match the
-# roadmap step "Machine Learning", silently breaking the dynamic roadmap.
-SKILL_ALIASES = {
-    "ml": "machine learning",
-    "dl": "deep learning",
-    "js": "javascript",
-    "ai": "artificial intelligence",
-    "cv": "computer vision",
-    "nlp": "natural language processing",
-    "bi": "business intelligence",
-}
-
-
-def _canonical_skill(skill: str) -> str:
-    """Normalizes a skill name for comparison, expanding known abbreviations."""
-    key = skill.strip().lower()
-    return SKILL_ALIASES.get(key, key)
 
 
 # --------------------------------------------------------------------------
@@ -146,23 +126,11 @@ def get_roadmap(career: str, csv_path: str = SKILL_ROADMAP_CSV) -> List[str]:
 
 def print_roadmap(career: str, csv_path: str = SKILL_ROADMAP_CSV) -> None:
     """Prints the roadmap as a numbered list, matching the expected output format."""
+    print(f"Roadmap for : {career}\n")
+
     skills = get_roadmap(career, csv_path)
     for i, skill in enumerate(skills, start=1):
         print(f"{i}. {skill}")
-
-
-def generate_dynamic_roadmap(career: str, known_skills: List[str], csv_path: str = SKILL_ROADMAP_CSV) -> List[str]:
-    """
-    Deliverable 2: Dynamic Roadmap Generator.
-
-    Unlike get_roadmap() (which always returns the full, fixed CSV order),
-    this filters out skills the user already knows - so two users with the
-    same career goal but different starting skills get genuinely different
-    roadmaps, exactly per the spec's User A / User B example.
-    """
-    full_roadmap = get_roadmap(career, csv_path)
-    known_canonical = {_canonical_skill(s) for s in known_skills}
-    return [skill for skill in full_roadmap if _canonical_skill(skill) not in known_canonical]
 
 
 # --------------------------------------------------------------------------
