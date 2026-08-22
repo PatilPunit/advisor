@@ -156,13 +156,17 @@ const styles = {
     fontWeight: 600,
     color: "#999",
     backgroundColor: "#161616",
-    border: "1px solid #2a2a2a",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#2a2a2a",
     borderRadius: "6px",
     cursor: "pointer",
   },
   tabButtonActive: {
     color: "#fff",
     backgroundColor: "#2563eb",
+    borderWidth: "1px",
+    borderStyle: "solid",
     borderColor: "#2563eb",
   },
   results: {
