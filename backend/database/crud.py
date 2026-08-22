@@ -13,7 +13,10 @@ from typing import List, Optional
 import bcrypt
 from sqlalchemy.orm import Session
 
-from database.models import ResumeHistory, User, UserProject, UserSkill
+from database.models import (
+    CareerRecommendation, JobMatch, MentorChat, ProjectRecommendation,
+    ResumeHistory, User, UserActivity, UserProject, UserSkill,
+)
 from roadmap import get_roadmap
 from recommender import recommend_career
 
@@ -237,4 +240,119 @@ def get_dashboard_data(db: Session, user_id: int) -> dict:
         "total_projects": total_projects,
         "roadmap_progress": roadmap_progress,
         "resume_history": history,
+    }
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Activity logging + AI feature history
+# --------------------------------------------------------------------------
+
+def log_activity(db: Session, user_id: Optional[int], action_type: str) -> None:
+    db.add(UserActivity(user_id=user_id, action_type=action_type))
+    db.commit()
+
+
+def log_mentor_chat(
+    db: Session, user_id: Optional[int], question: str, answer: str,
+    recommended_career: Optional[str],
+) -> MentorChat:
+    row = MentorChat(
+        user_id=user_id, question=question, answer=answer,
+        recommended_career=recommended_career,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_activity(db, user_id, "mentor_chat")
+    return row
+
+
+def get_mentor_history(db: Session, user_id: int) -> List[MentorChat]:
+    """Conversation memory: past questions/answers for a logged-in user."""
+    return (
+        db.query(MentorChat)
+        .filter(MentorChat.user_id == user_id)
+        .order_by(MentorChat.created_at.asc())
+        .all()
+    )
+
+
+def log_career_recommendation(
+    db: Session, user_id: Optional[int], career: str, match_percent: float,
+    missing_skills: List[str],
+) -> None:
+    db.add(CareerRecommendation(
+        user_id=user_id,
+        career=career,
+        match_percent=round(match_percent),
+        missing_skills=",".join(missing_skills),
+    ))
+    db.commit()
+    log_activity(db, user_id, "recommend")
+
+
+def log_job_match(
+    db: Session, user_id: Optional[int], match_score: int, missing_keywords: List[str],
+) -> None:
+    db.add(JobMatch(
+        user_id=user_id,
+        match_score=match_score,
+        missing_keywords=",".join(missing_keywords),
+    ))
+    db.commit()
+    log_activity(db, user_id, "job_match")
+
+
+def log_project_recommendation(
+    db: Session, user_id: Optional[int], project_name: str, domain: str, difficulty: str,
+) -> None:
+    db.add(ProjectRecommendation(
+        user_id=user_id, project_name=project_name, domain=domain, difficulty=difficulty,
+    ))
+    db.commit()
+    log_activity(db, user_id, "project_generator")
+
+
+def log_resume_analyze_activity(db: Session, user_id: Optional[int]) -> None:
+    log_activity(db, user_id, "resume_analyze")
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Analytics Dashboard aggregation
+# --------------------------------------------------------------------------
+
+def get_analytics_summary(db: Session) -> dict:
+    from collections import Counter
+    from datetime import datetime, timedelta
+
+    # Most chosen career: mode of career_recommendations.career
+    all_recs = db.query(CareerRecommendation).all()
+    career_counts = Counter(r.career for r in all_recs)
+    most_chosen_career = career_counts.most_common(1)[0][0] if career_counts else None
+
+    # Most missing skill: flatten every comma-joined missing_skills field, take the mode
+    skill_counts = Counter()
+    for r in all_recs:
+        if r.missing_skills:
+            skill_counts.update(s.strip() for s in r.missing_skills.split(",") if s.strip())
+    most_missing_skill = skill_counts.most_common(1)[0][0] if skill_counts else None
+
+    # Average resume score across all resume_history rows
+    all_scores = [r.score for r in db.query(ResumeHistory).all()]
+    average_resume_score = round(sum(all_scores) / len(all_scores), 1) if all_scores else None
+
+    # Daily active users: distinct user_ids with activity in the last 24h
+    since = datetime.utcnow() - timedelta(days=1)
+    recent_activity = (
+        db.query(UserActivity)
+        .filter(UserActivity.created_at >= since, UserActivity.user_id.isnot(None))
+        .all()
+    )
+    daily_active_users = len({a.user_id for a in recent_activity})
+
+    return {
+        "most_chosen_career": most_chosen_career,
+        "most_missing_skill": most_missing_skill,
+        "average_resume_score": average_resume_score,
+        "daily_active_users": daily_active_users,
     }
