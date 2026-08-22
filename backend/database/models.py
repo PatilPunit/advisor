@@ -71,3 +71,75 @@ class ResumeHistory(Base):
     upload_date = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="resume_history")
+
+
+# --------------------------------------------------------------------------
+# Phase 10 - Analytics + AI feature history tables
+# --------------------------------------------------------------------------
+
+class MentorChat(Base):
+    """One row per question asked to the AI Mentor - the conversation memory."""
+    __tablename__ = "mentor_chats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # nullable: guests can chat too
+    question = Column(String, nullable=False)
+    answer = Column(String, nullable=False)
+    recommended_career = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserActivity(Base):
+    """One row per meaningful action - powers the Analytics Dashboard."""
+    __tablename__ = "user_activity"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    action_type = Column(String, nullable=False)  # e.g. "recommend", "resume_analyze", "mentor_chat"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CareerRecommendation(Base):
+    """One row per /recommend call - powers 'Most Chosen Career' + 'Most Missing Skill'."""
+    __tablename__ = "career_recommendations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    career = Column(String, nullable=False)
+    match_percent = Column(Integer, nullable=False)
+    missing_skills = Column(String, nullable=True)  # comma-joined for simple storage
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class JobMatch(Base):
+    """One row per resume-vs-job-description match performed."""
+    __tablename__ = "job_matches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    match_score = Column(Integer, nullable=False)
+    missing_keywords = Column(String, nullable=True)  # comma-joined
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CareerPrediction(Base):
+    """One row per career-probability calculation (Deliverable 5)."""
+    __tablename__ = "career_predictions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    career = Column(String, nullable=False)
+    probability = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ProjectRecommendation(Base):
+    """One row per AI-generated project suggestion (Deliverable 6)."""
+    __tablename__ = "project_recommendations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    project_name = Column(String, nullable=False)
+    domain = Column(String, nullable=True)
+    difficulty = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
