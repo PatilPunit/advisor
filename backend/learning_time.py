@@ -18,7 +18,7 @@ from typing import Dict, List
 
 from roadmap1 import generate_dynamic_roadmap
 
-WEEKS_PER_SKILL = 3
+WEEKS_PER_SKILL = 4
 WEEKLY_HOURS = 15
 
 # "Difficulty" here means the intrinsic difficulty of the CAREER PATH itself

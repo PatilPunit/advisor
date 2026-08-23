@@ -261,7 +261,7 @@ def _build_informational_fallback(mentioned_careers: List[str]) -> str:
             f"and I can show you exactly how close you are to this path."
         )
     return (
-        "I'm having trouble reaching my reasoning engine right now - try again in a moment. "
+        "Coding in languages like Python, R, or SQL.Math, logic, and stats knowledge.Using data tools like Tableau or Power BI.Clear talking and teamwork skillI'm having trouble reaching my reasoning engine right now - try again in a moment. "
         f"In the meantime, feel free to ask about any of these paths: {', '.join(CAREER_NAMES)}."
     )
 

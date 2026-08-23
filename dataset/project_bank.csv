@@ -17,3 +17,319 @@ SIEM System,Cyber Security,Intermediate
 EcosortAI,AI,Advanced
 SaaS Application,Full Stack + AI,Advanced
 AI Career Advisor,Full Stack + AI,Advanced
+Weather Data Explorer,Data Science,Beginner
+Student Performance Analysis,Data Science,Beginner
+Movie Ratings Analysis,Data Science,Beginner
+Retail Sales Forecasting,Data Science,Beginner
+Air Quality Visualization,Data Science,Beginner
+Sports Statistics Explorer,Data Science,Beginner
+Food Delivery Data Study,Data Science,Beginner
+Hospital Readmission Analysis,Data Science,Intermediate
+Fraud Detection Model,Data Science,Intermediate
+Electricity Demand Forecast,Data Science,Intermediate
+Social Media Sentiment Study,Data Science,Intermediate
+Supply Chain Analytics,Data Science,Intermediate
+Public Transport Demand Model,Data Science,Intermediate
+Credit Risk Scoring,Data Science,Advanced
+Time Series Anomaly Platform,Data Science,Advanced
+Customer Lifetime Value Engine,Data Science,Advanced
+Experimentation Analytics Suite,Data Science,Advanced
+Personalized Pricing Simulator,Data Science,Advanced
+Expense Tracker Dashboard,Data Analytics,Beginner
+Inventory Report Dashboard,Data Analytics,Beginner
+Marketing Campaign Dashboard,Data Analytics,Beginner
+Website Traffic Dashboard,Data Analytics,Beginner
+HR Attendance Dashboard,Data Analytics,Beginner
+KPI Scorecard,Data Analytics,Beginner
+Budget Monitoring Dashboard,Data Analytics,Beginner
+Cohort Retention Analysis,Data Analytics,Intermediate
+Product Funnel Analytics,Data Analytics,Intermediate
+Call Center Performance Suite,Data Analytics,Intermediate
+Financial Reporting Workspace,Data Analytics,Intermediate
+Logistics Operations Dashboard,Data Analytics,Intermediate
+Healthcare Operations Dashboard,Data Analytics,Intermediate
+Real-Time Executive Dashboard,Data Analytics,Advanced
+Enterprise Data Mart,Data Analytics,Advanced
+Self-Service BI Platform,Data Analytics,Advanced
+Streaming Metrics Observatory,Data Analytics,Advanced
+Revenue Intelligence System,Data Analytics,Advanced
+Personal Landing Page,Web Development,Beginner
+Recipe Sharing Website,Web Development,Beginner
+Blog CMS Interface,Web Development,Beginner
+Event Registration Page,Web Development,Beginner
+Online Book Library,Web Development,Beginner
+Interactive Quiz Website,Web Development,Beginner
+Local Business Website,Web Development,Beginner
+E-Commerce Product Catalog,Web Development,Intermediate
+Real-Time Chat Website,Web Development,Intermediate
+Appointment Booking Portal,Web Development,Intermediate
+Learning Management Website,Web Development,Intermediate
+Travel Planner Website,Web Development,Intermediate
+Community Forum Platform,Web Development,Intermediate
+Collaborative Whiteboard,Web Development,Advanced
+Video Streaming Platform,Web Development,Advanced
+Multi-Tenant Content Platform,Web Development,Advanced
+Browser-Based Code Editor,Web Development,Advanced
+Progressive Web App Suite,Web Development,Advanced
+Iris Flower Classifier,Machine Learning,Beginner
+Titanic Survival Predictor,Machine Learning,Beginner
+Spam Email Detector,Machine Learning,Beginner
+Handwritten Digit Classifier,Machine Learning,Beginner
+Wine Quality Predictor,Machine Learning,Beginner
+Loan Approval Classifier,Machine Learning,Beginner
+Car Price Estimator,Machine Learning,Beginner
+Credit Card Fraud Model,Machine Learning,Intermediate
+Stock Trend Classifier,Machine Learning,Intermediate
+Plant Disease Detector,Machine Learning,Intermediate
+Retail Demand Predictor,Machine Learning,Intermediate
+Traffic Sign Recognition,Machine Learning,Intermediate
+Face Mask Detector,Machine Learning,Intermediate
+MLOps Model Registry,Machine Learning,Advanced
+Real-Time Fraud Detection,Machine Learning,Advanced
+Multi-Modal Classification Engine,Machine Learning,Advanced
+Federated Learning Prototype,Machine Learning,Advanced
+Model Monitoring Platform,Machine Learning,Advanced
+FAQ Chatbot,AI,Beginner
+Text Summarization Tool,AI,Beginner
+Voice Command Assistant,AI,Beginner
+Smart Email Categorizer,AI,Beginner
+AI Study Planner,AI,Beginner
+Image Caption Generator,AI,Beginner
+Resume Keyword Assistant,AI,Beginner
+Document Question Answering,AI,Intermediate
+Meeting Notes Assistant,AI,Intermediate
+Personal Finance Copilot,AI,Intermediate
+Code Review Assistant,AI,Intermediate
+Multilingual Translation Bot,AI,Intermediate
+AI Customer Support Agent,AI,Intermediate
+Retrieval Augmented Knowledge Base,AI,Advanced
+AI Interview Coach,AI,Advanced
+Agentic Research Workspace,AI,Advanced
+Synthetic Data Generator,AI,Advanced
+Multimodal Career Coach,AI,Advanced
+Kotlin Habit Tracker,Android Development,Beginner
+Android Calculator App,Android Development,Beginner
+Daily Journal App,Android Development,Beginner
+Flashcard Learning App,Android Development,Beginner
+Expense Manager App,Android Development,Beginner
+Pomodoro Timer App,Android Development,Beginner
+Fitness Log App,Android Development,Beginner
+Offline First News App,Android Development,Intermediate
+Campus Navigation App,Android Development,Intermediate
+Peer Study Group App,Android Development,Intermediate
+Food Ordering App,Android Development,Intermediate
+Personal Safety Alert App,Android Development,Intermediate
+Medication Reminder App,Android Development,Intermediate
+Android Banking Prototype,Android Development,Advanced
+Mobile Video Editing App,Android Development,Advanced
+Cross-Device Sync Platform,Android Development,Advanced
+AR Learning Experience,Android Development,Advanced
+Mobile AI Assistant,Android Development,Advanced
+Cloud File Storage,Cloud Computing,Beginner
+Static Website CDN,Cloud Computing,Beginner
+Serverless Contact Form,Cloud Computing,Beginner
+Cloud Image Backup,Cloud Computing,Beginner
+Containerized Web App,Cloud Computing,Beginner
+Cloud Cost Tracker,Cloud Computing,Beginner
+Managed Database Demo,Cloud Computing,Beginner
+Serverless E-Commerce Backend,Cloud Computing,Intermediate
+Kubernetes Deployment Lab,Cloud Computing,Intermediate
+Cloud Monitoring Stack,Cloud Computing,Intermediate
+Event-Driven Processing Pipeline,Cloud Computing,Intermediate
+Infrastructure as Code Starter,Cloud Computing,Intermediate
+Disaster Recovery Sandbox,Cloud Computing,Intermediate
+Multi-Region Web Platform,Cloud Computing,Advanced
+Cloud Data Lakehouse,Cloud Computing,Advanced
+Zero-Downtime Deployment System,Cloud Computing,Advanced
+Service Mesh Demonstration,Cloud Computing,Advanced
+Cloud-Native ML Platform,Cloud Computing,Advanced
+Password Strength Checker,Cyber Security,Beginner
+Network Port Scanner,Cyber Security,Beginner
+Phishing Awareness Simulator,Cyber Security,Beginner
+File Integrity Monitor,Cyber Security,Beginner
+Secure Password Vault Prototype,Cyber Security,Beginner
+HTTP Security Header Checker,Cyber Security,Beginner
+Basic Log Analyzer,Cyber Security,Beginner
+Web Application Security Scanner,Cyber Security,Intermediate
+Threat Intelligence Dashboard,Cyber Security,Intermediate
+Brute Force Detection System,Cyber Security,Intermediate
+Cloud Access Audit Tool,Cyber Security,Intermediate
+Malware Behavior Sandbox,Cyber Security,Intermediate
+Incident Response Tracker,Cyber Security,Intermediate
+Security Orchestration Platform,Cyber Security,Advanced
+Zero Trust Access Gateway,Cyber Security,Advanced
+Ransomware Detection Engine,Cyber Security,Advanced
+Threat Hunting Workbench,Cyber Security,Advanced
+Network Intrusion Detection Platform,Cyber Security,Advanced
+AI-Powered Web Store,Full Stack + AI,Beginner
+Smart Recipe Planner,Full Stack + AI,Beginner
+AI Portfolio Reviewer,Full Stack + AI,Beginner
+Chat-Based Study Portal,Full Stack + AI,Beginner
+Intelligent Expense Manager,Full Stack + AI,Beginner
+AI Blog Assistant,Full Stack + AI,Beginner
+Career Question Assistant,Full Stack + AI,Beginner
+AI Recruitment Platform,Full Stack + AI,Intermediate
+Intelligent Customer Support Portal,Full Stack + AI,Intermediate
+Personalized Learning Platform,Full Stack + AI,Intermediate
+AI Travel Planning SaaS,Full Stack + AI,Intermediate
+Document Workflow Automation,Full Stack + AI,Intermediate
+Smart Healthcare Triage Portal,Full Stack + AI,Intermediate
+Multi-Tenant AI Knowledge Base,Full Stack + AI,Advanced
+Autonomous Data Analysis SaaS,Full Stack + AI,Advanced
+AI-Powered Business Intelligence Suite,Full Stack + AI,Advanced
+Enterprise RAG Collaboration Platform,Full Stack + AI,Advanced
+Agent Marketplace Platform,Full Stack + AI,Advanced
+Data Quality Monitoring Portal,Data Science,Beginner
+Language Learning Analytics,Data Science,Beginner
+Museum Visitor Analysis,Data Science,Beginner
+Mobile App Usage Study,Data Science,Beginner
+Climate Trend Explorer,Data Science,Beginner
+Customer Feedback Explorer,Data Science,Beginner
+Subscription Cancellation Predictor,Data Science,Intermediate
+Medical Image Classification Study,Data Science,Intermediate
+Real Estate Market Forecaster,Data Science,Intermediate
+Sports Match Outcome Model,Data Science,Intermediate
+Demand-Based Staffing Model,Data Science,Intermediate
+Fraud Network Analysis,Data Science,Intermediate
+Graph-Based Recommendation Engine,Data Science,Advanced
+Causal Inference Experiment Lab,Data Science,Advanced
+Geospatial Risk Intelligence,Data Science,Advanced
+Bayesian Forecasting Platform,Data Science,Advanced
+Data Science Model Governance Hub,Data Science,Advanced
+Product Analytics Starter,Data Analytics,Beginner
+School Results Dashboard,Data Analytics,Beginner
+Restaurant Sales Dashboard,Data Analytics,Beginner
+Donation Insights Dashboard,Data Analytics,Beginner
+Warehouse Stock Dashboard,Data Analytics,Beginner
+Travel Booking Dashboard,Data Analytics,Beginner
+Subscription Metrics Dashboard,Data Analytics,Intermediate
+Marketing Attribution Platform,Data Analytics,Intermediate
+Procurement Spend Analytics,Data Analytics,Intermediate
+Customer Segmentation Workspace,Data Analytics,Intermediate
+Energy Consumption Analytics,Data Analytics,Intermediate
+Risk Management Dashboard,Data Analytics,Intermediate
+Enterprise Planning Analytics,Data Analytics,Advanced
+Cross-Department Data Portal,Data Analytics,Advanced
+Data Governance Dashboard,Data Analytics,Advanced
+Predictive Business Operations Hub,Data Analytics,Advanced
+Global Revenue Analytics Platform,Data Analytics,Advanced
+Developer Documentation Site,Web Development,Beginner
+Personal Finance Website,Web Development,Beginner
+Pet Adoption Portal,Web Development,Beginner
+Job Board Interface,Web Development,Beginner
+Music Playlist Website,Web Development,Beginner
+Digital Library Website,Web Development,Beginner
+Freelancer Marketplace,Web Development,Intermediate
+Online Examination Platform,Web Development,Intermediate
+Property Rental Portal,Web Development,Intermediate
+Healthcare Appointment Platform,Web Development,Intermediate
+Subscription Billing Website,Web Development,Intermediate
+Inventory Management Portal,Web Development,Intermediate
+Scalable Marketplace Engine,Web Development,Advanced
+Enterprise Workflow Builder,Web Development,Advanced
+Real-Time Collaboration Suite,Web Development,Advanced
+Headless Commerce Platform,Web Development,Advanced
+Secure Identity Management Portal,Web Development,Advanced
+Text Emotion Classifier,Machine Learning,Beginner
+Customer Review Classifier,Machine Learning,Beginner
+Bike Rental Demand Predictor,Machine Learning,Beginner
+Basic Recommendation Engine,Machine Learning,Beginner
+Crop Yield Predictor,Machine Learning,Beginner
+Customer Segmentation Model,Machine Learning,Beginner
+News Topic Classifier,Machine Learning,Intermediate
+Image Similarity Search,Machine Learning,Intermediate
+Fraud Risk Ranking Model,Machine Learning,Intermediate
+Delivery Time Predictor,Machine Learning,Intermediate
+Energy Usage Predictor,Machine Learning,Intermediate
+Speech Emotion Classifier,Machine Learning,Intermediate
+Online Learning Model Service,Machine Learning,Advanced
+Reinforcement Learning Game Agent,Machine Learning,Advanced
+Large-Scale Feature Store,Machine Learning,Advanced
+Computer Vision Quality Inspector,Machine Learning,Advanced
+Autonomous Route Optimization,Machine Learning,Advanced
+AI Grammar Coach,AI,Beginner
+AI Flashcard Generator,AI,Beginner
+AI Recipe Generator,AI,Beginner
+AI Travel Assistant,AI,Beginner
+AI News Summarizer,AI,Beginner
+AI Cover Letter Helper,AI,Beginner
+Visual Search Assistant,AI,Intermediate
+Speech Transcription Workspace,AI,Intermediate
+AI Research Notebook,AI,Intermediate
+Personalized Recommendation Copilot,AI,Intermediate
+AI Contract Explanation Tool,AI,Intermediate
+Customer Intent Classifier,AI,Intermediate
+AI Planning and Tool-Use Agent,AI,Advanced
+Enterprise Document Intelligence,AI,Advanced
+AI Safety Evaluation Lab,AI,Advanced
+Private LLM Gateway,AI,Advanced
+AI Model Evaluation Platform,AI,Advanced
+Community Volunteer App,Android Development,Beginner
+Book Reading Tracker,Android Development,Beginner
+Campus Event App,Android Development,Beginner
+Water Intake Reminder,Android Development,Beginner
+Public Transport Tracker,Android Development,Beginner
+Simple Banking UI,Android Development,Beginner
+Local Marketplace App,Android Development,Intermediate
+Delivery Tracking App,Android Development,Intermediate
+Collaborative Notes App,Android Development,Intermediate
+Smart Agriculture App,Android Development,Intermediate
+Language Practice App,Android Development,Intermediate
+Fitness Coaching App,Android Development,Intermediate
+Android IoT Control Center,Android Development,Advanced
+Offline Maps Navigation App,Android Development,Advanced
+Secure Mobile Wallet Prototype,Android Development,Advanced
+Mobile AR Shopping App,Android Development,Advanced
+Enterprise Field Service App,Android Development,Advanced
+Cloud Database Migration Lab,Cloud Computing,Beginner
+Cloud-Based Portfolio Deployment,Cloud Computing,Beginner
+Object Storage Media Gallery,Cloud Computing,Beginner
+Cloud Function Image Resizer,Cloud Computing,Beginner
+Static Documentation Hosting,Cloud Computing,Beginner
+Cloud-Based Task Queue,Cloud Computing,Beginner
+Managed Kubernetes Microservices,Cloud Computing,Intermediate
+Cloud Data Processing Pipeline,Cloud Computing,Intermediate
+Centralized Observability Platform,Cloud Computing,Intermediate
+Cloud Secret Management Lab,Cloud Computing,Intermediate
+API Gateway and Rate Limiter,Cloud Computing,Intermediate
+Cloud Backup Automation,Cloud Computing,Intermediate
+Global Edge Computing Platform,Cloud Computing,Advanced
+Confidential Computing Prototype,Cloud Computing,Advanced
+Cloud FinOps Optimization Engine,Cloud Computing,Advanced
+Distributed Event Streaming Platform,Cloud Computing,Advanced
+Autonomous Cloud Remediation System,Cloud Computing,Advanced
+SQL Injection Training Lab,Cyber Security,Beginner
+Secure API Testing Tool,Cyber Security,Beginner
+Security Awareness Quiz,Cyber Security,Beginner
+Browser Privacy Checker,Cyber Security,Beginner
+Basic Hash Cracking Demonstrator,Cyber Security,Beginner
+Cybersecurity Asset Inventory,Cyber Security,Beginner
+API Threat Detection Service,Cyber Security,Intermediate
+Container Security Scanner,Cyber Security,Intermediate
+Digital Forensics Case Manager,Cyber Security,Intermediate
+Vulnerability Management Portal,Cyber Security,Intermediate
+Secure Code Review Assistant,Cyber Security,Intermediate
+Endpoint Monitoring Dashboard,Cyber Security,Intermediate
+Autonomous Security Operations Center,Cyber Security,Advanced
+Cloud Threat Detection Mesh,Cyber Security,Advanced
+Identity Threat Analytics,Cyber Security,Advanced
+Privacy-Preserving Threat Sharing,Cyber Security,Advanced
+Adversarial ML Defense Platform,Cyber Security,Advanced
+AI-Powered Knowledge Portal,Full Stack + AI,Beginner
+Smart Interview Practice App,Full Stack + AI,Beginner
+AI Meal Planning Platform,Full Stack + AI,Beginner
+Intelligent Help Desk,Full Stack + AI,Beginner
+AI-Powered Note Manager,Full Stack + AI,Beginner
+Job Description Analyzer,Full Stack + AI,Beginner
+AI Learning Roadmap Builder,Full Stack + AI,Beginner
+AI Resume and Job Matching SaaS,Full Stack + AI,Intermediate
+Intelligent Sales Assistant,Full Stack + AI,Intermediate
+AI-Powered Project Management Suite,Full Stack + AI,Intermediate
+Customer Feedback Intelligence SaaS,Full Stack + AI,Intermediate
+AI Document Collaboration Platform,Full Stack + AI,Intermediate
+Conversational E-Commerce Assistant,Full Stack + AI,Intermediate
+Multi-Agent Business Operations Platform,Full Stack + AI,Advanced
+Enterprise AI Governance Console,Full Stack + AI,Advanced
+AI-Powered Developer Platform,Full Stack + AI,Advanced
+Real-Time Multimodal Collaboration Suite,Full Stack + AI,Advanced
+Autonomous Career Planning Platform,Full Stack + AI,Advanced
