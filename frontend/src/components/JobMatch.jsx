@@ -88,6 +88,7 @@ function JobMatch({ userId }) {
             <span style={styles.scoreLabel}>Match Score</span>
             <span style={styles.scoreValue}>{result.match_score}%</span>
           </div>
+          {result.note && <p style={styles.noteText}>{result.note}</p>}
           <div style={styles.progressTrack}>
             <div style={{ ...styles.progressFill, width: `${result.match_score}%` }} />
           </div>
@@ -199,6 +200,12 @@ const styles = {
     fontSize: "22px",
     fontWeight: 700,
     color: "#4ade80",
+  },
+  noteText: {
+    fontSize: "12px",
+    color: "#facc15",
+    fontStyle: "italic",
+    margin: 0,
   },
   progressTrack: {
     width: "100%",
