@@ -1,391 +1,340 @@
-from typing import List, Optional
+"""
+ai_mentor.py
+--------------
+The "AI Mentor" - answers free-text career questions using a hosted LLM
+(Groq, free tier) grounded in real data from your recommender.
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+ARCHITECTURE (read this before changing anything):
+  1. Parse the question for mentioned skills/careers, call recommend_career()
+     to get REAL facts when skills are available (never invented, never
+     hallucinated - this part is 100% deterministic).
+  2. ALWAYS attempt to call Groq for the actual reply - even for general
+     questions with no specific skills mentioned (e.g. "what does a
+     frontend developer do?"). Previously this codebase short-circuited
+     and returned a canned message for any question without detected
+     skills, which is why the chatbot felt "static" - it never even
+     tried reaching the LLM for a huge class of normal questions. Fixed.
+  3. Only fall back to a deterministic templated answer if Groq is
+     genuinely unreachable (missing key, network error, bad response) -
+     and that failure is now LOUDLY logged to your terminal, not silently
+     swallowed, so you can actually see why it failed.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from typing import Dict, List, Optional
+
+import requests
+from dotenv import load_dotenv
+
+# Loads variables from a .env file sitting next to this file (backend/.env)
+# directly into the environment. This bypasses the entire "did I export
+# this in the right terminal / did .bashrc actually get sourced" problem -
+# it's read fresh from a file on every single process start, no matter
+# which terminal, IDE, or shell launches uvicorn.
+load_dotenv()
 
 from recommender import recommend_career
-from roadmap import get_roadmap, generate_dynamic_roadmap
-from project import get_projects_for_career
-from resume.parser import extract_text_from_pdf
-from resume.extractor import extract_skills
-from resume.scorer import calculate_score
-from resume.intelligence import evaluate_resume
-
-from ai_mentor import answer_career_question
-from job_match import extract_job_skills, match_resume_to_job
-from project_generator import generate_project
-from learning_time import estimate_learning_time
-
-from database.db import Base, engine, get_db
-from database import crud, schemas
-
-Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title="AI Career Advisor")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+from project import get_project_details
+from skills_vocab import (
+    load_master_vocabulary, find_skills_in_text,
+    infer_all_mentioned_careers, strip_career_mentions, CAREER_NAMES,
 )
 
-
 # --------------------------------------------------------------------------
-# Existing models (Phase 4/6)
-# --------------------------------------------------------------------------
-
-class RecommendRequest(BaseModel):
-    skills: List[str] = Field(..., example=["Python", "Pandas"])
-    interest: Optional[str] = Field(None, example="cybersecurity analyst")
-    user_id: Optional[int] = None
-
-
-class TopMatch(BaseModel):
-    career: str
-    score: float
-
-
-class RecommendResponse(BaseModel):
-    career: str
-    match_score: float
-    missing_skills: List[str]
-    required_skills: List[str]
-    user_skills: List[str]
-    roadmap: List[str]
-    projects: List[dict]
-    top_matches: List[TopMatch]
-
-
-class ResumeAnalyzeResponse(BaseModel):
-    score: int
-    skills: List[str]
-    missing: List[str]
-    recommended_career: str
-    intelligence_score: int
-    weaknesses: List[str]
-    structural_strengths: List[str]
-
-
-# --------------------------------------------------------------------------
-# Routes: Phase 4/6
+# Intent classification - this fixes the "same rigid pattern for every
+# question" problem. A question like "what is a frontend developer" is
+# INFORMATIONAL (wants an explanation), not a request for a personalized
+# skill-match score. Previously, any question that happened to mention a
+# career name (even via alias, e.g. "frontend") got routed through the
+# grounded skill-match template regardless of what was actually being
+# asked - producing confusing answers like "0% match, missing everything"
+# for a simple definitional question. Now, informational questions get a
+# genuinely open, conversational LLM response instead.
 # --------------------------------------------------------------------------
 
-@app.get("/")
-def home():
-    return {"message": "AI Career Advisor Running"}
+_INFORMATIONAL_PATTERNS = [
+    r"\bwhat is\b", r"\bwhat's\b", r"\bwhat are\b", r"\bwhat does\b",
+    r"\bexplain\b", r"\btell me about\b", r"\bhow does\b", r"\bhow do\b",
+    r"\bdefine\b", r"\bwho is\b", r"\bdescribe\b",
+]
+_COMPARISON_PATTERNS = [
+    r"\bshould i\b", r"\bwhich is better\b", r"\bcompare\b", r"\bvs\b",
+    r"\bversus\b", r"\bor should\b",
+]
 
 
-@app.post("/recommend", response_model=RecommendResponse)
-def recommend(request: RecommendRequest, db: Session = Depends(get_db)):
-    if not request.skills:
-        raise HTTPException(status_code=400, detail="skills list cannot be empty")
+def _classify_intent(question: str) -> str:
+    """Returns 'comparison', 'informational', or 'general'."""
+    q_lower = question.lower()
+    if any(re.search(p, q_lower) for p in _COMPARISON_PATTERNS):
+        return "comparison"
+    if any(re.search(p, q_lower) for p in _INFORMATIONAL_PATTERNS):
+        return "informational"
+    return "general"
 
-    results = recommend_career(request.skills, request.interest, top_n=3)
-    if not results:
-        raise HTTPException(status_code=404, detail="No matching career found")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.3-70b-versatile"  # swap to "llama-3.1-8b-instant" for even faster, slightly less capable
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-    top = results[0]
-    roadmap = get_roadmap(top["career"])
-    projects = get_projects_for_career(top["beginner_project"], top["advanced_project"])
-    top_matches = [
-        TopMatch(career=r["career"], score=round(r["match_percent"])) for r in results[:3]
-    ]
-
-    # Phase 10: log this recommendation for analytics (Most Chosen Career / Most Missing Skill)
-    crud.log_career_recommendation(
-        db, request.user_id, top["career"], top["match_percent"], top["missing_skills"]
-    )
-
-    return RecommendResponse(
-        career=top["career"],
-        match_score=top["match_percent"],
-        missing_skills=top["missing_skills"],
-        required_skills=top["required_skills"],
-        user_skills=request.skills,
-        roadmap=roadmap,
-        projects=projects,
-        top_matches=top_matches,
-    )
+if GROQ_API_KEY:
+    print(f"[ai_mentor] GROQ_API_KEY loaded ({len(GROQ_API_KEY)} chars) - mentor will use live LLM.")
+else:
+    print("[ai_mentor] GROQ_API_KEY NOT found. Create backend/.env with GROQ_API_KEY=your_key - mentor will use templated fallback only until then.")
 
 
-@app.post("/resume-analyze", response_model=ResumeAnalyzeResponse)
-async def resume_analyze(
-    file: UploadFile = File(...),
-    user_id: Optional[int] = Form(None),
-    db: Session = Depends(get_db),
-):
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Please upload a .pdf file")
-
-    file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+def call_groq(prompt: str, timeout: int = 20) -> Optional[str]:
+    """
+    Calls Groq's hosted LLM API. Returns the generated text, or None if it
+    can't be reached - and in every failure case, prints EXACTLY why to
+    the terminal, instead of silently swallowing the error. This is the
+    difference between "it just doesn't work" and "oh, it's a 401, my key
+    is wrong" - always check your terminal output after a failed chat.
+    """
+    if not GROQ_API_KEY:
+        print("[ai_mentor] Skipping Groq call - GROQ_API_KEY not set.")
+        return None
 
     try:
-        resume_text = extract_text_from_pdf(file_bytes)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    if not resume_text.strip():
-        raise HTTPException(
-            status_code=422,
-            detail="No readable text found in this PDF (it may be a scanned image).",
+        response = requests.post(
+            GROQ_API_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a warm, knowledgeable AI career mentor for a "
+                            "computer engineering student. You help with career "
+                            "choice, skill planning, and general tech career questions."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.7,
+                "max_tokens": 400,
+            },
+            timeout=timeout,
         )
+    except requests.exceptions.RequestException as e:
+        print(f"[ai_mentor] Groq request FAILED (network/connection error): {e}")
+        return None
 
-    detected_skills = extract_skills(resume_text)
-    if not detected_skills:
-        raise HTTPException(status_code=422, detail="No recognizable skills found in this resume.")
+    if response.status_code != 200:
+        print(f"[ai_mentor] Groq returned HTTP {response.status_code}: {response.text[:500]}")
+        return None
 
-    top_career_result = recommend_career(detected_skills, interest=None, top_n=1)[0]
-    recommended_career = top_career_result["career"]
-    required_skills = top_career_result["required_skills"]
-
-    score_result = calculate_score(detected_skills, required_skills)
-
-    # Phase 10: Resume Intelligence Engine - structural evaluation
-    intelligence = evaluate_resume(resume_text, score_result["score"])
-
-    if user_id is not None:
-        user = crud.get_user(db, user_id)
-        if user is None:
-            raise HTTPException(status_code=404, detail=f"No user with id {user_id}")
-        crud.add_resume_score(db, user_id, intelligence["score"])
-    crud.log_resume_analyze_activity(db, user_id)
-
-    return ResumeAnalyzeResponse(
-        score=score_result["score"],
-        skills=detected_skills,
-        missing=score_result["missing"],
-        recommended_career=recommended_career,
-        intelligence_score=intelligence["score"],
-        weaknesses=intelligence["weaknesses"],
-        structural_strengths=intelligence["structural_strengths"],
-    )
-
-
-# --------------------------------------------------------------------------
-# Routes: Auth
-# --------------------------------------------------------------------------
-
-@app.post("/register", response_model=schemas.UserOut)
-def register(request: schemas.UserCreate, db: Session = Depends(get_db)):
-    if crud.get_user_by_email(db, request.email):
-        raise HTTPException(status_code=400, detail="An account with this email already exists")
-    user = crud.create_user(db, request.name, request.email, request.password)
-    return user
-
-
-@app.post("/login", response_model=schemas.LoginResponse)
-def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
-    user = crud.authenticate_user(db, request.email, request.password)
-    if not user:
-        return schemas.LoginResponse(success=False, message="Invalid email or password")
-    return schemas.LoginResponse(success=True, user_id=user.id, name=user.name)
-
-
-# --------------------------------------------------------------------------
-# Routes: Career goal, skills, projects
-# --------------------------------------------------------------------------
-
-@app.post("/users/{user_id}/goal", response_model=schemas.UserOut)
-def set_goal(user_id: int, request: schemas.SetGoalRequest, db: Session = Depends(get_db)):
     try:
-        user = crud.set_career_goal(db, user_id, request.career)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    return user
+        data = response.json()
+        text = data["choices"][0]["message"]["content"].strip()
+        if not text:
+            print("[ai_mentor] Groq returned an empty response.")
+            return None
+        return text
+    except (KeyError, IndexError, ValueError) as e:
+        print(f"[ai_mentor] Could not parse Groq response ({e}): {response.text[:500]}")
+        return None
 
 
-@app.get("/users/{user_id}/skills", response_model=List[schemas.SkillOut])
-def list_skills(user_id: int, db: Session = Depends(get_db)):
-    return crud.get_user_skills(db, user_id)
+def _extract_mentioned_skills(question: str) -> List[str]:
+    vocab = load_master_vocabulary()
+    cleaned = strip_career_mentions(question)
+    return find_skills_in_text(cleaned, vocab)
 
 
-@app.post("/users/{user_id}/skills", response_model=schemas.SkillOut)
-def update_skill(user_id: int, request: schemas.SkillUpdateRequest, db: Session = Depends(get_db)):
-    return crud.update_skill_completion(db, user_id, request.skill_name, request.completed)
+def _extract_mentioned_careers(question: str) -> List[str]:
+    """Finds career names explicitly mentioned/described in the question."""
+    return infer_all_mentioned_careers(question)
 
 
-@app.get("/users/{user_id}/projects", response_model=List[schemas.ProjectOut])
-def list_projects(user_id: int, db: Session = Depends(get_db)):
-    return crud.get_user_projects(db, user_id)
+def generate_advice(skills: List[str], career: str) -> Dict:
+    """Given known skills and ONE target career, returns structured advice."""
+    results = recommend_career(skills, career, top_n=8)
+    match = next((r for r in results if r["career"].lower() == career.lower()), results[0])
+    beginner_project = match.get("beginner_project", "")
+    project_details = get_project_details(beginner_project) if beginner_project else None
+    return {
+        "career": match["career"],
+        "match_percent": match["match_percent"],
+        "possessed_skills": match["matched_skills"],
+        "missing_skills": match["missing_skills"],
+        "suggested_project": project_details["project_name"] if project_details else beginner_project,
+    }
 
 
-@app.post("/users/{user_id}/projects", response_model=schemas.ProjectOut)
-def update_project(user_id: int, request: schemas.ProjectUpdateRequest, db: Session = Depends(get_db)):
-    return crud.update_project_completion(db, user_id, request.project_name, request.completed)
+def generate_learning_plan(skills: List[str], career: str) -> List[str]:
+    """Returns the ordered list of skills still needed for `career`."""
+    from roadmap import get_roadmap
+    known_lower = {s.lower() for s in skills}
+    return [s for s in get_roadmap(career) if s.lower() not in known_lower]
 
 
-@app.get("/dashboard/{user_id}", response_model=schemas.DashboardResponse)
-def dashboard(user_id: int, db: Session = Depends(get_db)):
-    try:
-        data = crud.get_dashboard_data(db, user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    return data
+def _gather_grounded_facts(question: str, user_skills: Optional[List[str]] = None) -> Dict:
+    """
+    Deterministic fact-gathering. Returns has_facts=False when no skills
+    are mentioned/known - that's now just informational, NOT a reason to
+    skip the LLM (see answer_career_question below).
+    """
+    mentioned_skills_in_question = _extract_mentioned_skills(question)
+    mentioned_careers = _extract_mentioned_careers(question)
+    effective_skills = list(set((user_skills or []) + mentioned_skills_in_question))
 
-
-# --------------------------------------------------------------------------
-# Phase 10 - Deliverable 1: AI Mentor
-# --------------------------------------------------------------------------
-
-@app.post("/mentor/chat", response_model=schemas.MentorChatResponse)
-def mentor_chat(request: schemas.MentorChatRequest, db: Session = Depends(get_db)):
-    if not request.question.strip():
-        raise HTTPException(status_code=400, detail="question cannot be empty")
-
-    # If logged in, factor in their already-completed roadmap skills too
-    user_skills: List[str] = []
-    conversation_history = None
-    if request.user_id is not None:
-        skills = crud.get_user_skills(db, request.user_id)
-        user_skills = [s.skill_name for s in skills if s.completed]
-
-        past_chats = crud.get_mentor_history(db, request.user_id)
-        if past_chats:
-            conversation_history = [
-                {"question": c.question, "answer": c.answer} for c in past_chats
-            ]
-
-    result = answer_career_question(
-        request.question, user_skills=user_skills, conversation_history=conversation_history
-    )
-
-    # Conversation memory: persist every question+answer
-    crud.log_mentor_chat(
-        db, request.user_id, request.question, result["answer"], result["recommended_career"]
-    )
-
-    return schemas.MentorChatResponse(**result)
-
-
-@app.get("/mentor/history/{user_id}")
-def mentor_history(user_id: int, db: Session = Depends(get_db)):
-    """Returns past mentor conversations for a logged-in user (conversation memory)."""
-    history = crud.get_mentor_history(db, user_id)
-    return [
-        {"question": h.question, "answer": h.answer, "created_at": h.created_at}
-        for h in history
-    ]
-
-
-# --------------------------------------------------------------------------
-# Phase 10 - Deliverable 2: Dynamic Roadmap Generator
-# --------------------------------------------------------------------------
-
-@app.post("/roadmap/dynamic")
-def dynamic_roadmap(request: schemas.DynamicRoadmapRequest):
-    try:
-        roadmap = generate_dynamic_roadmap(request.career, request.known_skills)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    return {"career": request.career, "roadmap": roadmap}
-
-
-# --------------------------------------------------------------------------
-# Phase 10 - Deliverable 4: Resume vs Job Matching
-# --------------------------------------------------------------------------
-
-@app.post("/job-match", response_model=schemas.JobMatchResponse)
-async def job_match(
-    file: UploadFile = File(...),
-    job_description: str = Form(...),
-    user_id: Optional[int] = Form(None),
-    db: Session = Depends(get_db),
-):
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Please upload a .pdf file")
-
-    file_bytes = await file.read()
-    try:
-        resume_text = extract_text_from_pdf(file_bytes)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    resume_skills = extract_skills(resume_text)
-    job_result = extract_job_skills(job_description)
-    job_skills = job_result["skills"]
-
-    if not job_skills:
-        # Even after direct matching AND career inference, nothing was found -
-        # this means the job description is too short/vague to work with at
-        # all (e.g. a single word). Ask for more detail rather than crash.
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Couldn't extract any requirements from that job description - "
-                "try pasting a longer excerpt with more detail about the role."
+    if not effective_skills:
+        return {
+            "has_facts": False,
+            "recommended_career": None,
+            "possessed_skills": [],
+            "missing_skills": [],
+            "suggested_project": None,
+            "match_percent": 0,
+            "mentioned_careers": mentioned_careers,
+            "fallback_answer": (
+                "I couldn't detect any specific skills in your message. "
+                "Try something like: \"I know Python and SQL. Should I learn "
+                "Data Engineering or Data Science?\" - or just ask me anything "
+                "about tech careers in general."
             ),
-        )
+        }
 
-    result = match_resume_to_job(resume_skills, job_skills)
-    crud.log_job_match(db, user_id, result["match_score"], result["missing_keywords"])
+    if len(mentioned_careers) >= 2:
+        candidates = [generate_advice(effective_skills, c) for c in mentioned_careers]
+        best = max(candidates, key=lambda c: c["match_percent"])
+    elif len(mentioned_careers) == 1:
+        best = generate_advice(effective_skills, mentioned_careers[0])
+    else:
+        results = recommend_career(effective_skills, None, top_n=1)
+        top = results[0]
+        best = {
+            "career": top["career"], "match_percent": top["match_percent"],
+            "possessed_skills": top["matched_skills"], "missing_skills": top["missing_skills"],
+            "suggested_project": top.get("beginner_project"),
+        }
 
-    response = schemas.JobMatchResponse(**result)
-    if job_result["used_inference"]:
-        response.note = (
-            f"This job description didn't name specific tools, so we inferred "
-            f"it's likely a {job_result['inferred_career']} role and matched "
-            f"against that career's typical requirements."
-        )
-    return response
-
-
-# --------------------------------------------------------------------------
-# Phase 10 - Deliverable 5: Career Probability Engine
-# --------------------------------------------------------------------------
-
-@app.post("/career-probabilities", response_model=List[schemas.CareerProbability])
-def career_probabilities(request: schemas.CareerProbabilityRequest):
-    if not request.skills:
-        raise HTTPException(status_code=400, detail="skills list cannot be empty")
-
-    results = recommend_career(request.skills, None, top_n=8)
-    return [
-        schemas.CareerProbability(career=r["career"], probability=round(r["match_percent"], 1))
-        for r in results
-    ]
-
-
-# --------------------------------------------------------------------------
-# Phase 10 - Deliverable 6: AI Project Generator
-# --------------------------------------------------------------------------
-
-@app.post("/project-generator", response_model=schemas.ProjectGeneratorResponse)
-def project_generator(request: schemas.ProjectGeneratorRequest, db: Session = Depends(get_db)):
-    project = generate_project(request.domain, request.level)
-    if not project:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No project found for domain='{request.domain}', level='{request.level}'",
-        )
-
-    crud.log_project_recommendation(
-        db, request.user_id, project["project_name"], project["domain"], project["difficulty"]
+    missing_str = ", ".join(best["missing_skills"]) if best["missing_skills"] else "nothing - fully ready"
+    possessed_str = ", ".join(best["possessed_skills"]) if best["possessed_skills"] else "none yet"
+    fallback_answer = (
+        f"Based on your skills, {best['career']} is a strong fit "
+        f"({best['match_percent']:.0f}% match).\n\n"
+        f"You already possess: {possessed_str}\n"
+        f"Missing: {missing_str}\n"
+        f"Suggested Project: {best['suggested_project']}"
     )
 
-    return schemas.ProjectGeneratorResponse(**project)
+    return {
+        "has_facts": True,
+        "recommended_career": best["career"],
+        "possessed_skills": best["possessed_skills"],
+        "missing_skills": best["missing_skills"],
+        "suggested_project": best["suggested_project"],
+        "match_percent": best["match_percent"],
+        "mentioned_careers": mentioned_careers,
+        "fallback_answer": fallback_answer,
+    }
 
 
-# --------------------------------------------------------------------------
-# Phase 10 - Deliverable 7: Learning Time Predictor
-# --------------------------------------------------------------------------
+CAREER_DESCRIPTIONS = {
+    "Data Scientist": "analyzes data to extract insights and build predictive models, typically using Python, SQL, and statistics.",
+    "ML Engineer": "builds and deploys machine learning systems into production - training, scaling, and maintaining models that other software relies on.",
+    "Data Analyst": "turns raw data into actionable business insights, often using SQL, Excel, and dashboarding tools like Power BI.",
+    "Full Stack Developer": "builds both the frontend (what users see and interact with) and the backend (server logic, databases, APIs) of an application.",
+    "Cyber Security Analyst": "protects systems and networks from threats - monitoring for suspicious activity, investigating incidents, and hardening defenses.",
+    "Android Developer": "builds mobile applications for Android devices, typically using Kotlin or Java.",
+    "Cloud Engineer": "designs, deploys, and manages infrastructure on cloud platforms like AWS, GCP, or Azure.",
+    "AI Engineer": "designs and builds AI systems, often combining machine learning, deep learning, and production deployment.",
+}
 
-@app.post("/learning-time", response_model=schemas.LearningTimeResponse)
-def learning_time(request: schemas.LearningTimeRequest):
-    result = estimate_learning_time(request.career, request.current_skills)
-    return schemas.LearningTimeResponse(**result)
+
+def _build_informational_fallback(mentioned_careers: List[str]) -> str:
+    """Used only if Groq is unreachable for an informational question - still genuinely useful, not a dead end."""
+    if mentioned_careers:
+        career = mentioned_careers[0]
+        description = CAREER_DESCRIPTIONS.get(career, "")
+        return (
+            f"A {career} {description}\n\n"
+            f"If you'd like, tell me your current skills (e.g. \"I know Python and SQL\") "
+            f"and I can show you exactly how close you are to this path."
+        )
+    return (
+        "I'm having trouble reaching my reasoning engine right now - try again in a moment. "
+        f"In the meantime, feel free to ask about any of these paths: {', '.join(CAREER_NAMES)}."
+    )
 
 
-# --------------------------------------------------------------------------
-# Phase 10 - Deliverable 8: Analytics Dashboard
-# --------------------------------------------------------------------------
+def _build_llm_prompt(question: str, intent: str, facts: Dict, mentioned_careers: List[str], conversation_history: Optional[List[Dict]] = None) -> str:
+    history_block = ""
+    if conversation_history:
+        turns = [f"Student asked: {t['question']}\nYou answered: {t['answer']}" for t in conversation_history[-4:]]
+        history_block = "Previous conversation:\n" + "\n\n".join(turns) + "\n\n"
 
-@app.get("/analytics/summary", response_model=schemas.AnalyticsSummaryResponse)
-def analytics_summary(db: Session = Depends(get_db)):
-    data = crud.get_analytics_summary(db)
-    return schemas.AnalyticsSummaryResponse(**data)
+    if intent == "informational":
+        career_hint = f" (they seem to be asking about {mentioned_careers[0]})" if mentioned_careers else ""
+        skill_hint = ""
+        if facts and facts.get("has_facts"):
+            skill_hint = (
+                f"\n\n(For context if relevant: they know {facts['possessed_skills'] or 'no listed skills yet'}. "
+                f"Only mention this if it naturally fits the answer - the question is asking for an explanation, "
+                f"not a skill-match score.)"
+            )
+        return f"""{history_block}The student's question{career_hint}: "{question}"
+
+This is an informational/explanatory question - answer it directly and clearly, like a knowledgeable mentor would (what the role involves, what a beginner should know, etc.). Do NOT respond with a rigid "X% match" skill-comparison format - that's not what's being asked. Keep it conversational, 3-5 sentences.{skill_hint}"""
+
+    if facts and facts.get("has_facts"):
+        return f"""{history_block}The student's new question: "{question}"
+
+Ground truth facts you MUST use (do not invent any numbers, skills, or project names beyond these):
+- Best-fit career: {facts['recommended_career']}
+- Skill match: {facts['match_percent']:.0f}%
+- Skills they already have: {facts['possessed_skills'] or 'none yet'}
+- Skills they're missing: {facts['missing_skills'] or 'none - fully ready'}
+- Suggested starter project: {facts['suggested_project']}
+
+Write a natural, encouraging, conversational reply (3-5 sentences). Reference the specific facts above naturally in your own words - don't just restate them as a list. End with one concrete, motivating next step. Do not mention any career, skill, or percentage that isn't in the facts above."""
+
+    return f"""{history_block}The student's new question: "{question}"
+
+You don't have specific skill data for this student yet. Answer their question helpfully and conversationally as a knowledgeable career mentor would. Keep it to 3-5 sentences. If natural, invite them to share their current skills for a personalized match - but don't force it."""
+
+
+def answer_career_question(
+    question: str,
+    user_skills: Optional[List[str]] = None,
+    conversation_history: Optional[List[Dict]] = None,
+) -> Dict:
+    """
+    Main entry point. Classifies intent first:
+      - "informational" (what/explain/how/define) -> open explanatory answer,
+        never forced into the rigid skill-match template
+      - "comparison" or "general" -> grounded skill-match facts used when
+        skills are available
+
+    ALWAYS attempts the LLM - only falls back to a deterministic answer
+    (still genuinely useful, not just an error) if Groq is unreachable.
+    """
+    intent = _classify_intent(question)
+    facts = _gather_grounded_facts(question, user_skills)
+    mentioned_careers = facts.get("mentioned_careers", [])
+
+    prompt = _build_llm_prompt(question, intent, facts, mentioned_careers, conversation_history)
+    llm_answer = call_groq(prompt)
+
+    if llm_answer:
+        answer = llm_answer
+    elif intent == "informational":
+        answer = _build_informational_fallback(mentioned_careers)
+    else:
+        answer = facts["fallback_answer"]
+
+    return {
+        "answer": answer,
+        "recommended_career": facts["recommended_career"],
+        "possessed_skills": facts["possessed_skills"],
+        "missing_skills": facts["missing_skills"],
+        "suggested_project": facts["suggested_project"],
+    }

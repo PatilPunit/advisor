@@ -5,9 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-
 from recommender import recommend_career
-from roadmap1 import get_roadmap, generate_dynamic_roadmap
+from roadmap import get_roadmap, generate_dynamic_roadmap
 from project import get_projects_for_career
 from resume.parser import extract_text_from_pdf
 from resume.extractor import extract_skills
@@ -308,19 +307,32 @@ async def job_match(
         raise HTTPException(status_code=400, detail=str(e))
 
     resume_skills = extract_skills(resume_text)
-    job_skills = extract_job_skills(job_description)
+    job_result = extract_job_skills(job_description)
+    job_skills = job_result["skills"]
 
     if not job_skills:
+        # Even after direct matching AND career inference, nothing was found -
+        # this means the job description is too short/vague to work with at
+        # all (e.g. a single word). Ask for more detail rather than crash.
         raise HTTPException(
             status_code=422,
-            detail="No recognizable skills/keywords found in the job description.",
+            detail=(
+                "Couldn't extract any requirements from that job description - "
+                "try pasting a longer excerpt with more detail about the role."
+            ),
         )
 
     result = match_resume_to_job(resume_skills, job_skills)
-
     crud.log_job_match(db, user_id, result["match_score"], result["missing_keywords"])
 
-    return schemas.JobMatchResponse(**result)
+    response = schemas.JobMatchResponse(**result)
+    if job_result["used_inference"]:
+        response.note = (
+            f"This job description didn't name specific tools, so we inferred "
+            f"it's likely a {job_result['inferred_career']} role and matched "
+            f"against that career's typical requirements."
+        )
+    return response
 
 
 # --------------------------------------------------------------------------
