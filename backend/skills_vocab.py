@@ -85,3 +85,75 @@ def find_skills_in_text(text: str, vocabulary: List[str]) -> List[str]:
     """Returns every skill from `vocabulary` that appears in `text`, original casing."""
     text_lower = text.lower()
     return [skill for skill in vocabulary if _skill_present(skill, text_lower)]
+
+
+# --------------------------------------------------------------------------
+# Career inference - shared between the AI Mentor and the Job Matching
+# engine, so both detect careers from free text the same consistent way.
+# --------------------------------------------------------------------------
+
+CAREER_NAMES = [
+    "Data Scientist", "ML Engineer", "Data Analyst", "Full Stack Developer",
+    "Cyber Security Analyst", "Android Developer", "Cloud Engineer", "AI Engineer",
+]
+
+# Common alternate phrasings (and common typos) mapped to the canonical
+# career name. Substring/alias matching only - deliberately NOT character-
+# level fuzzy matching, which previously produced false positives (e.g.
+# "I know Python" incorrectly matching "AI Engineer" on coincidental
+# letter overlap with zero real semantic connection).
+CAREER_ALIASES = {
+    "Data Scientist": ["data science"],
+    "ML Engineer": ["machine learning engineer", "machine learning", " ml "],
+    "Data Analyst": ["data analytics", "data analysis"],
+    "Full Stack Developer": [
+        "full stack", "fullstack", "web developer", "web development",
+        "frontend developer", "front end developer", "front-end developer",
+        "fronend developer", "fronend", "frontend", "backend developer", "backend",
+    ],
+    "Cyber Security Analyst": [
+        "cybersecurity", "cyber security", "security analyst", "security engineer",
+        "security breaches", "defensive controls", "monitoring for threats",
+        "protects computer networks",
+    ],
+    "Android Developer": ["android development", "android app"],
+    "Cloud Engineer": ["cloud computing", "devops"],
+    "AI Engineer": ["artificial intelligence engineer", "artificial intelligence"],
+}
+
+
+def infer_all_mentioned_careers(text: str) -> List[str]:
+    """
+    Returns every career mentioned/described in a piece of free text, using
+    substring + alias matching. Used by the AI Mentor (to detect which
+    career a question is about) and the Job Matching engine (to infer a
+    role from a job description written in plain English without naming
+    specific tools - e.g. "monitors for threats, investigates security
+    breaches" clearly describes a Cyber Security Analyst role even
+    without the literal word "Linux" or "SIEM" appearing anywhere).
+    """
+    text_padded = f" {text.lower()} "
+    found = []
+    for career in CAREER_NAMES:
+        phrases = [career.lower()] + CAREER_ALIASES.get(career, [])
+        if any(phrase in text_padded for phrase in phrases) and career not in found:
+            found.append(career)
+    return found
+
+
+def strip_career_mentions(text: str) -> str:
+    """
+    Removes career name/alias phrases from text (case-insensitively),
+    leaving everything else intact. Used before skill extraction so that
+    a career being DISCUSSED (e.g. "ML Engineering") doesn't get
+    misread as a skill the person claims to POSSESS just because it
+    happens to contain a skill-like abbreviation (e.g. "ML").
+    """
+    result = text
+    all_phrases = list(CAREER_NAMES)
+    for aliases in CAREER_ALIASES.values():
+        all_phrases.extend(aliases)
+    # Longest phrases first, so "ML Engineer" is stripped before a bare "ML" could be
+    for phrase in sorted(all_phrases, key=len, reverse=True):
+        result = re.sub(re.escape(phrase), " ", result, flags=re.IGNORECASE)
+    return result
