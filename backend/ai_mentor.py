@@ -47,6 +47,13 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"  # swap to "llama-3.1-8b-instant" for even faster, slightly less capable
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+# Temporary startup check - remove once you've confirmed this works.
+# Prints to your uvicorn terminal the moment the app starts.
+if GROQ_API_KEY:
+    print(f"[ai_mentor] GROQ_API_KEY loaded: {GROQ_API_KEY[:8]}... (mentor will use live LLM)")
+else:
+    print("[ai_mentor] GROQ_API_KEY NOT found in environment - mentor will use templated fallback only.")
+
 
 def call_groq(prompt: str, timeout: int = 20) -> Optional[str]:
     """
