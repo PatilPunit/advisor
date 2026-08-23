@@ -18,7 +18,7 @@ function ProjectGenerator({ userId }) {
     setLoading(true);
     setResult(null);
     try {
-      const response = await fetch("http://127.0.0.1:8000/backend/project_generator", {
+      const response = await fetch("http://127.0.0.1:8000/project-generator", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ domain, level, user_id: userId || null }),

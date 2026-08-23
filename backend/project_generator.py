@@ -17,7 +17,7 @@ import random
 from typing import Dict, List, Optional
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_BANK_CSV = os.path.join(BASE_DIR, "project_bank.csv")
+PROJECT_BANK_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/project_bank.csv")
 
 TIMELINE_BY_DIFFICULTY = {
     "beginner": "1-2 Weeks",

@@ -1,29 +1,23 @@
 """
 ai_mentor.py
 --------------
-The "AI Mentor" - answers free-text career questions.
+The "AI Mentor" - answers free-text career questions using a hosted LLM
+(Groq, free tier) grounded in real data from your recommender.
 
-Architecture: grounded RAG, not a blind chatbot. Before ever calling the
-LLM, this still parses the question and calls recommend_career() to get
-REAL facts (actual match %, actual missing skills, actual project names
-from your CSVs). Those facts are then handed to a hosted LLM (via Groq)
-as context, and the LLM's only job is to write a natural, warm, dynamic
-response using them - it is instructed not to invent numbers or skills.
-
-This means: the conversation genuinely varies response to response (real
-LLM generation, not a template), while the facts stay 100% accurate,
-because they never come from the LLM - only the phrasing does.
-
-Why Groq instead of ChatGPT/Ollama:
-  - Free tier, no credit card required
-  - Hosted - nothing to install or run locally, no slow local inference
-  - Extremely fast (Groq's custom LPU hardware, not GPUs - typically
-    under a second per response)
-  - One-time setup: sign up at console.groq.com, create an API key, set
-    it as an environment variable. That's it.
-  - If the API key is missing or the request fails, this module
-    automatically falls back to the original rule-based templated answer -
-    the app never breaks, it just becomes less conversational.
+ARCHITECTURE (read this before changing anything):
+  1. Parse the question for mentioned skills/careers, call recommend_career()
+     to get REAL facts when skills are available (never invented, never
+     hallucinated - this part is 100% deterministic).
+  2. ALWAYS attempt to call Groq for the actual reply - even for general
+     questions with no specific skills mentioned (e.g. "what does a
+     frontend developer do?"). Previously this codebase short-circuited
+     and returned a canned message for any question without detected
+     skills, which is why the chatbot felt "static" - it never even
+     tried reaching the LLM for a huge class of normal questions. Fixed.
+  3. Only fall back to a deterministic templated answer if Groq is
+     genuinely unreachable (missing key, network error, bad response) -
+     and that failure is now LOUDLY logged to your terminal, not silently
+     swallowed, so you can actually see why it failed.
 """
 
 from __future__ import annotations
@@ -33,6 +27,14 @@ import re
 from typing import Dict, List, Optional
 
 import requests
+from dotenv import load_dotenv
+
+# Loads variables from a .env file sitting next to this file (backend/.env)
+# directly into the environment. This bypasses the entire "did I export
+# this in the right terminal / did .bashrc actually get sourced" problem -
+# it's read fresh from a file on every single process start, no matter
+# which terminal, IDE, or shell launches uvicorn.
+load_dotenv()
 
 from recommender import recommend_career
 from project import get_project_details
@@ -43,25 +45,46 @@ CAREER_NAMES = [
     "Cyber Security Analyst", "Android Developer", "Cloud Engineer", "AI Engineer",
 ]
 
+# Common alternate phrasings (and common typos) mapped to the canonical
+# career name. Substring/alias matching only - deliberately NOT using
+# character-level fuzzy matching, since that previously produced false
+# positives (e.g. "I know Python" incorrectly matching "AI Engineer" on
+# coincidental letter overlap with zero real semantic connection).
+CAREER_ALIASES = {
+    "Data Scientist": ["data science"],
+    "ML Engineer": ["machine learning engineer", "machine learning", " ml "],
+    "Data Analyst": ["data analytics", "data analysis"],
+    "Full Stack Developer": [
+        "full stack", "fullstack", "web developer", "web development",
+        "frontend developer", "front end developer", "front-end developer",
+        "fronend developer", "fronend", "frontend", "backend developer", "backend",
+    ],
+    "Cyber Security Analyst": ["cybersecurity", "cyber security", "security analyst", "security engineer"],
+    "Android Developer": ["android development", "android app"],
+    "Cloud Engineer": ["cloud computing", "devops"],
+    "AI Engineer": ["artificial intelligence engineer", "artificial intelligence"],
+}
+
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"  # swap to "llama-3.1-8b-instant" for even faster, slightly less capable
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Temporary startup check - remove once you've confirmed this works.
-# Prints to your uvicorn terminal the moment the app starts.
 if GROQ_API_KEY:
-    print(f"[ai_mentor] GROQ_API_KEY loaded: {GROQ_API_KEY[:8]}... (mentor will use live LLM)")
+    print(f"[ai_mentor] GROQ_API_KEY loaded ({len(GROQ_API_KEY)} chars) - mentor will use live LLM.")
 else:
-    print("[ai_mentor] GROQ_API_KEY NOT found in environment - mentor will use templated fallback only.")
+    print("[ai_mentor] GROQ_API_KEY NOT found. Create backend/.env with GROQ_API_KEY=your_key - mentor will use templated fallback only until then.")
 
 
 def call_groq(prompt: str, timeout: int = 20) -> Optional[str]:
     """
-    Calls Groq's hosted, free LLM API. Returns the generated text, or None
-    if the API key is missing / the request fails (caller should fall back
-    to the deterministic templated answer).
+    Calls Groq's hosted LLM API. Returns the generated text, or None if it
+    can't be reached - and in every failure case, prints EXACTLY why to
+    the terminal, instead of silently swallowing the error. This is the
+    difference between "it just doesn't work" and "oh, it's a 401, my key
+    is wrong" - always check your terminal output after a failed chat.
     """
     if not GROQ_API_KEY:
+        print("[ai_mentor] Skipping Groq call - GROQ_API_KEY not set.")
         return None
 
     try:
@@ -76,7 +99,11 @@ def call_groq(prompt: str, timeout: int = 20) -> Optional[str]:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a warm, direct AI career mentor for a computer engineering student.",
+                        "content": (
+                            "You are a warm, knowledgeable AI career mentor for a "
+                            "computer engineering student. You help with career "
+                            "choice, skill planning, and general tech career questions."
+                        ),
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -85,11 +112,23 @@ def call_groq(prompt: str, timeout: int = 20) -> Optional[str]:
             },
             timeout=timeout,
         )
-        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"[ai_mentor] Groq request FAILED (network/connection error): {e}")
+        return None
+
+    if response.status_code != 200:
+        print(f"[ai_mentor] Groq returned HTTP {response.status_code}: {response.text[:500]}")
+        return None
+
+    try:
         data = response.json()
         text = data["choices"][0]["message"]["content"].strip()
-        return text if text else None
-    except Exception:
+        if not text:
+            print("[ai_mentor] Groq returned an empty response.")
+            return None
+        return text
+    except (KeyError, IndexError, ValueError) as e:
+        print(f"[ai_mentor] Could not parse Groq response ({e}): {response.text[:500]}")
         return None
 
 
@@ -98,59 +137,30 @@ def _extract_mentioned_skills(question: str) -> List[str]:
     return find_skills_in_text(question, vocab)
 
 
-# Common alternate phrasings mapped to the canonical career name. Substring
-# and alias matching only - NO character-level fuzzy matching, because
-# short-string fuzzy ratios produce false positives (e.g. "I know Python"
-# was previously matching "AI Engineer" purely on coincidental letter
-# overlap, with no real semantic connection).
-CAREER_ALIASES = {
-    "Data Scientist": ["data science"],
-    "ML Engineer": ["machine learning engineer", "machine learning", " ml "],
-    "Data Analyst": ["data analytics", "data analysis"],
-    "Full Stack Developer": ["full stack", "fullstack", "web developer", "web development"],
-    "Cyber Security Analyst": ["cybersecurity", "cyber security", "security analyst", "security engineer"],
-    "Android Developer": ["android development", "android app"],
-    "Cloud Engineer": ["cloud computing", "devops"],
-    "AI Engineer": ["artificial intelligence engineer", "artificial intelligence"],
-}
-
-
 def _extract_mentioned_careers(question: str) -> List[str]:
     """
     Finds career names explicitly mentioned in the question, using exact
-    substring + curated alias matching only (e.g. "Data Science" matches
-    "Data Scientist", "ML" matches "ML Engineer" when it appears as a
-    standalone word). Careers not present in this system (e.g. "Data
-    Engineering", which isn't one of the 8 careers in career_paths.csv) are
-    simply not detected - the mentor still answers using whichever
-    recognized career(s) it did find.
+    substring + curated alias matching (e.g. "Data Science" matches "Data
+    Scientist", "ML" matches "ML Engineer", "frontend" matches "Full Stack
+    Developer"). Careers not present in this system are simply not
+    detected - the mentor still answers using whatever it did find, or
+    falls back to general advice if nothing matched.
     """
-    q_padded = f" {question.lower()} "  # padding lets " ml " match as a whole word
+    q_padded = f" {question.lower()} "
     found = []
-
     for career in CAREER_NAMES:
-        career_lower = career.lower()
-        aliases = CAREER_ALIASES.get(career, [])
-        all_phrases = [career_lower] + aliases
-
+        all_phrases = [career.lower()] + CAREER_ALIASES.get(career, [])
         if any(phrase in q_padded for phrase in all_phrases) and career not in found:
             found.append(career)
-
     return found
 
 
 def generate_advice(skills: List[str], career: str) -> Dict:
-    """
-    Given known skills and ONE target career, returns a structured advice
-    block: possessed skills, missing skills, match %, and a suggested
-    beginner project.
-    """
+    """Given known skills and ONE target career, returns structured advice."""
     results = recommend_career(skills, career, top_n=8)
     match = next((r for r in results if r["career"].lower() == career.lower()), results[0])
-
     beginner_project = match.get("beginner_project", "")
     project_details = get_project_details(beginner_project) if beginner_project else None
-
     return {
         "career": match["career"],
         "match_percent": match["match_percent"],
@@ -161,18 +171,17 @@ def generate_advice(skills: List[str], career: str) -> Dict:
 
 
 def generate_learning_plan(skills: List[str], career: str) -> List[str]:
-    """Returns the ordered list of skills still needed for `career`, given `skills` already known."""
+    """Returns the ordered list of skills still needed for `career`."""
     from roadmap import get_roadmap
     known_lower = {s.lower() for s in skills}
-    full_roadmap = get_roadmap(career)
-    return [s for s in full_roadmap if s.lower() not in known_lower]
+    return [s for s in get_roadmap(career) if s.lower() not in known_lower]
 
 
 def _gather_grounded_facts(question: str, user_skills: Optional[List[str]] = None) -> Dict:
     """
-    Does all the REAL data work: parses the question, calls recommend_career(),
-    and returns hard facts. Nothing here ever touches the LLM - this is the
-    part that must never hallucinate.
+    Deterministic fact-gathering. Returns has_facts=False when no skills
+    are mentioned/known - that's now just informational, NOT a reason to
+    skip the LLM (see answer_career_question below).
     """
     mentioned_skills_in_question = _extract_mentioned_skills(question)
     mentioned_careers = _extract_mentioned_careers(question)
@@ -186,10 +195,12 @@ def _gather_grounded_facts(question: str, user_skills: Optional[List[str]] = Non
             "missing_skills": [],
             "suggested_project": None,
             "match_percent": 0,
+            "mentioned_careers": mentioned_careers,
             "fallback_answer": (
                 "I couldn't detect any specific skills in your message. "
                 "Try something like: \"I know Python and SQL. Should I learn "
-                "Data Engineering or Data Science?\""
+                "Data Engineering or Data Science?\" - or just ask me anything "
+                "about tech careers in general."
             ),
         }
 
@@ -202,16 +213,13 @@ def _gather_grounded_facts(question: str, user_skills: Optional[List[str]] = Non
         results = recommend_career(effective_skills, None, top_n=1)
         top = results[0]
         best = {
-            "career": top["career"],
-            "match_percent": top["match_percent"],
-            "possessed_skills": top["matched_skills"],
-            "missing_skills": top["missing_skills"],
+            "career": top["career"], "match_percent": top["match_percent"],
+            "possessed_skills": top["matched_skills"], "missing_skills": top["missing_skills"],
             "suggested_project": top.get("beginner_project"),
         }
 
     missing_str = ", ".join(best["missing_skills"]) if best["missing_skills"] else "nothing - fully ready"
     possessed_str = ", ".join(best["possessed_skills"]) if best["possessed_skills"] else "none yet"
-
     fallback_answer = (
         f"Based on your skills, {best['career']} is a strong fit "
         f"({best['match_percent']:.0f}% match).\n\n"
@@ -227,6 +235,7 @@ def _gather_grounded_facts(question: str, user_skills: Optional[List[str]] = Non
         "missing_skills": best["missing_skills"],
         "suggested_project": best["suggested_project"],
         "match_percent": best["match_percent"],
+        "mentioned_careers": mentioned_careers,
         "fallback_answer": fallback_answer,
     }
 
@@ -234,14 +243,11 @@ def _gather_grounded_facts(question: str, user_skills: Optional[List[str]] = Non
 def _build_llm_prompt(question: str, facts: Dict, conversation_history: Optional[List[Dict]] = None) -> str:
     history_block = ""
     if conversation_history:
-        turns = []
-        for turn in conversation_history[-4:]:  # last 4 turns for context, keeps prompt small
-            turns.append(f"Student asked: {turn['question']}\nYou answered: {turn['answer']}")
+        turns = [f"Student asked: {t['question']}\nYou answered: {t['answer']}" for t in conversation_history[-4:]]
         history_block = "Previous conversation:\n" + "\n\n".join(turns) + "\n\n"
 
-    return f"""You are a warm, direct AI career mentor for a computer engineering student choosing between tech career paths. 
-
-{history_block}The student's new question: "{question}"
+    if facts["has_facts"]:
+        return f"""{history_block}The student's new question: "{question}"
 
 Ground truth facts you MUST use (do not invent any numbers, skills, or project names beyond these):
 - Best-fit career: {facts['recommended_career']}
@@ -250,7 +256,13 @@ Ground truth facts you MUST use (do not invent any numbers, skills, or project n
 - Skills they're missing: {facts['missing_skills'] or 'none - fully ready'}
 - Suggested starter project: {facts['suggested_project']}
 
-Write a natural, encouraging, conversational reply (3-5 sentences). Reference the specific facts above naturally in your own words - don't just restate them as a list. If there's conversation history, acknowledge it like a real ongoing conversation. End with one concrete, motivating next step. Do not mention any career, skill, or percentage that isn't in the facts above."""
+Write a natural, encouraging, conversational reply (3-5 sentences). Reference the specific facts above naturally in your own words - don't just restate them as a list. End with one concrete, motivating next step. Do not mention any career, skill, or percentage that isn't in the facts above."""
+
+    # No specific skills detected - still a real question, still gets a
+    # real dynamic answer, just without invented match percentages.
+    return f"""{history_block}The student's new question: "{question}"
+
+You don't have specific skill data for this student yet. Answer their question helpfully and conversationally as a knowledgeable career mentor would - general advice, explanations of roles, encouragement, whatever fits the question. Keep it to 3-5 sentences. If it's natural to do so, invite them to share their current skills (e.g. "I know Python and SQL") so you can give them a personalized match next time - but don't force this if it doesn't fit the question."""
 
 
 def answer_career_question(
@@ -259,27 +271,11 @@ def answer_career_question(
     conversation_history: Optional[List[Dict]] = None,
 ) -> Dict:
     """
-    Main entry point for the mentor.
-
-    Step 1 (always, deterministic): parse the question + call recommend_career()
-    to get real, grounded facts - this never changes conversation to conversation.
-
-    Step 2 (dynamic): hand those facts to a local LLM (Ollama) to write a
-    genuinely varied, conversational response. If Ollama isn't running, falls
-    back automatically to the deterministic templated answer from Step 1 - the
-    mentor still works, just less conversationally, until Ollama is started.
+    Main entry point. ALWAYS attempts the LLM first (grounded with real
+    facts when available, general-purpose when not) - only falls back to
+    a fixed templated answer if Groq is genuinely unreachable.
     """
     facts = _gather_grounded_facts(question, user_skills)
-
-    if not facts["has_facts"]:
-        return {
-            "answer": facts["fallback_answer"],
-            "recommended_career": None,
-            "possessed_skills": [],
-            "missing_skills": [],
-            "suggested_project": None,
-        }
-
     prompt = _build_llm_prompt(question, facts, conversation_history)
     llm_answer = call_groq(prompt)
 
