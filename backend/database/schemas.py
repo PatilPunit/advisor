@@ -168,6 +168,7 @@ class JobMatchResponse(BaseModel):
     match_score: int
     missing_keywords: List[str]
     recommended_actions: List[str]
+    note: Optional[str] = None
 
 
 # --------------------------------------------------------------------------
