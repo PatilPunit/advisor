@@ -8,13 +8,15 @@ keeps main.py focused on HTTP concerns, crud.py focused on data.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 import bcrypt
 from sqlalchemy.orm import Session
 
 from database.models import (
-    CareerRecommendation, JobMatch, MentorChat, ProjectRecommendation,
+    CareerProfile, CareerRecommendation, CareerScoreSnapshot, JobMatch,
+    MentorChat, Notification, ProjectRecommendation, RecommendationFeedback,
     ResumeHistory, User, UserActivity, UserProject, UserSkill,
 )
 from roadmap import get_roadmap
@@ -78,36 +80,60 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
 
 def set_career_goal(db: Session, user_id: int, career: str) -> User:
     """
-    Sets the user's career goal and syncs their roadmap skills to match it.
+    Sets the user's career goal and syncs BOTH their roadmap skills AND
+    tracked projects to match it.
 
-    If the user previously had a different career goal, skills that belong
-    ONLY to the old roadmap are removed (so switching goals doesn't leave a
-    mixed, ambiguous checklist combining two different careers). Skills that
-    are shared between the old and new roadmap (e.g. "Python" appears in
-    almost every career) keep their completed status - only truly unrelated
-    old skills are dropped, and new required skills are added as unchecked.
+    If the user previously had a different career goal, skills/projects
+    that belong ONLY to the old career are removed (so switching goals
+    doesn't leave a mixed, ambiguous checklist combining two different
+    careers). Items shared between old and new (e.g. "Python" appears in
+    almost every roadmap) keep their completed status - only truly
+    unrelated old items are dropped.
     """
+    from recommender import _load_career_data
+
     user = get_user(db, user_id)
     if not user:
         raise ValueError(f"No user with id {user_id}")
 
     user.career_goal = career
 
+    # --- Skills ---
     new_roadmap = get_roadmap(career)
     new_roadmap_lower = {s.lower() for s in new_roadmap}
 
-    existing_rows = db.query(UserSkill).filter(UserSkill.user_id == user_id).all()
-    existing_by_name = {row.skill_name.lower(): row for row in existing_rows}
+    existing_skill_rows = db.query(UserSkill).filter(UserSkill.user_id == user_id).all()
+    existing_skills_by_name = {row.skill_name.lower(): row for row in existing_skill_rows}
 
-    # Remove rows that belong to a different (old) career's roadmap only
-    for name_lower, row in existing_by_name.items():
+    for name_lower, row in existing_skills_by_name.items():
         if name_lower not in new_roadmap_lower:
             db.delete(row)
 
-    # Add any new-career skills the user doesn't already have tracked
     for skill in new_roadmap:
-        if skill.lower() not in existing_by_name:
+        if skill.lower() not in existing_skills_by_name:
             db.add(UserSkill(user_id=user_id, skill_name=skill, completed=False))
+
+    # --- Projects (beginner + advanced, from career_paths.csv) ---
+    career_data = next(
+        (c for c in _load_career_data() if c["career"].lower() == career.lower()), None
+    )
+    new_project_names_lower = set()
+    if career_data:
+        new_project_names_lower = {
+            career_data["beginner_projects"].lower(), career_data["advanced_projects"].lower()
+        }
+
+    existing_project_rows = db.query(UserProject).filter(UserProject.user_id == user_id).all()
+    existing_projects_by_name = {row.project_name.lower(): row for row in existing_project_rows}
+
+    for name_lower, row in existing_projects_by_name.items():
+        if name_lower not in new_project_names_lower:
+            db.delete(row)
+
+    if career_data:
+        for project_name in [career_data["beginner_projects"], career_data["advanced_projects"]]:
+            if project_name and project_name.lower() not in existing_projects_by_name:
+                db.add(UserProject(user_id=user_id, project_name=project_name, completed=False))
 
     db.commit()
     db.refresh(user)
@@ -130,12 +156,17 @@ def update_skill_completion(
         .filter(UserSkill.user_id == user_id, UserSkill.skill_name.ilike(skill_name))
         .first()
     )
+    now = datetime.utcnow()
     if row is None:
         # skill not seeded yet (e.g. user hasn't set a career goal) - create it
-        row = UserSkill(user_id=user_id, skill_name=skill_name, completed=completed)
+        row = UserSkill(
+            user_id=user_id, skill_name=skill_name, completed=completed,
+            completed_at=now if completed else None,
+        )
         db.add(row)
     else:
         row.completed = completed
+        row.completed_at = now if completed else None
 
     db.commit()
     db.refresh(row)
@@ -158,11 +189,16 @@ def update_project_completion(
         .filter(UserProject.user_id == user_id, UserProject.project_name.ilike(project_name))
         .first()
     )
+    now = datetime.utcnow()
     if row is None:
-        row = UserProject(user_id=user_id, project_name=project_name, completed=completed)
+        row = UserProject(
+            user_id=user_id, project_name=project_name, completed=completed,
+            completed_at=now if completed else None,
+        )
         db.add(row)
     else:
         row.completed = completed
+        row.completed_at = now if completed else None
 
     db.commit()
     db.refresh(row)
@@ -355,4 +391,237 @@ def get_analytics_summary(db: Session) -> dict:
         "most_missing_skill": most_missing_skill,
         "average_resume_score": average_resume_score,
         "daily_active_users": daily_active_users,
+    }
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Career Twin (Deliverable 1) + score history
+# --------------------------------------------------------------------------
+
+def upsert_career_profile(
+    db: Session, user_id: int, target_career: Optional[str], readiness_score: int,
+    skill_count: int, project_count: int,
+) -> CareerProfile:
+    profile = db.query(CareerProfile).filter(CareerProfile.user_id == user_id).first()
+    if profile is None:
+        profile = CareerProfile(user_id=user_id)
+        db.add(profile)
+
+    profile.target_career = target_career
+    profile.current_score = readiness_score
+    profile.readiness_score = readiness_score
+    profile.skill_count = skill_count
+    profile.project_count = project_count
+
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+def add_score_snapshot(db: Session, user_id: int, score: int) -> None:
+    db.add(CareerScoreSnapshot(user_id=user_id, score=score))
+    db.commit()
+
+
+def add_score_snapshot_if_new_day(db: Session, user_id: int, score: int) -> None:
+    """Avoids flooding the history table with a snapshot every single page load."""
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    existing_today = (
+        db.query(CareerScoreSnapshot)
+        .filter(CareerScoreSnapshot.user_id == user_id, CareerScoreSnapshot.snapshot_date >= today_start)
+        .first()
+    )
+    if not existing_today:
+        add_score_snapshot(db, user_id, score)
+
+
+def get_score_snapshots(db: Session, user_id: int, days: int = 30) -> List[CareerScoreSnapshot]:
+    since = datetime.utcnow() - timedelta(days=days)
+    return (
+        db.query(CareerScoreSnapshot)
+        .filter(CareerScoreSnapshot.user_id == user_id, CareerScoreSnapshot.snapshot_date >= since)
+        .order_by(CareerScoreSnapshot.snapshot_date.asc())
+        .all()
+    )
+
+
+def get_latest_job_match_score(db: Session, user_id: int) -> Optional[int]:
+    row = (
+        db.query(JobMatch)
+        .filter(JobMatch.user_id == user_id)
+        .order_by(JobMatch.created_at.desc())
+        .first()
+    )
+    return row.match_score if row else None
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Learning Analytics Engine (Deliverable 4)
+# --------------------------------------------------------------------------
+
+def get_weekly_report(db: Session, user_id: int) -> dict:
+    since = datetime.utcnow() - timedelta(days=7)
+
+    skills_completed_this_week = (
+        db.query(UserSkill)
+        .filter(UserSkill.user_id == user_id, UserSkill.completed == True,  # noqa: E712
+                UserSkill.completed_at >= since)
+        .all()
+    )
+    projects_completed_this_week = (
+        db.query(UserProject)
+        .filter(UserProject.user_id == user_id, UserProject.completed == True,  # noqa: E712
+                UserProject.completed_at >= since)
+        .all()
+    )
+
+    # "Engagement days" - a defensible, honestly-measurable proxy for "time
+    # spent" (we don't instrument actual session duration anywhere, so we
+    # don't fabricate an hours/minutes figure - we report distinct days
+    # with any logged activity in the last week instead).
+    recent_activity = (
+        db.query(UserActivity)
+        .filter(UserActivity.user_id == user_id, UserActivity.created_at >= since)
+        .all()
+    )
+    engagement_days = len({a.created_at.date() for a in recent_activity})
+
+    # Career score delta vs a week ago
+    snapshots = get_score_snapshots(db, user_id, days=8)
+    score_delta = None
+    if len(snapshots) >= 2:
+        score_delta = snapshots[-1].score - snapshots[0].score
+
+    return {
+        "skills_completed": [s.skill_name for s in skills_completed_this_week],
+        "projects_completed": [p.project_name for p in projects_completed_this_week],
+        "engagement_days": engagement_days,
+        "career_score_delta": score_delta,
+    }
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Recommendation Feedback Loop (Deliverable 5)
+# --------------------------------------------------------------------------
+
+def add_feedback(
+    db: Session, user_id: Optional[int], recommendation_type: str,
+    reference: Optional[str], rating: int, comment: Optional[str],
+) -> RecommendationFeedback:
+    row = RecommendationFeedback(
+        user_id=user_id, recommendation_type=recommendation_type,
+        reference=reference, rating=rating, comment=comment,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def get_average_feedback_rating(db: Session) -> Optional[float]:
+    ratings = [r.rating for r in db.query(RecommendationFeedback).all()]
+    return round(sum(ratings) / len(ratings), 2) if ratings else None
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Notification Engine (Deliverable 7)
+# --------------------------------------------------------------------------
+
+def generate_notifications_if_needed(db: Session, user_id: int) -> None:
+    """
+    Checks whether the user has gone stale (no skill completed in 7+ days)
+    and creates a fresh notification if so - but never spams duplicates,
+    only creates one if the most recent notification is older than 3 days.
+    Called lazily whenever /notifications/{user_id} is hit (no background
+    scheduler in this stack, so staleness is checked on-demand instead).
+    """
+    skills = db.query(UserSkill).filter(UserSkill.user_id == user_id).all()
+    completed_dates = [s.completed_at for s in skills if s.completed and s.completed_at]
+    last_activity = max(completed_dates) if completed_dates else None
+
+    is_stale = last_activity is None or (datetime.utcnow() - last_activity).days >= 7
+    if not is_stale:
+        return
+
+    recent_notif = (
+        db.query(Notification)
+        .filter(Notification.user_id == user_id)
+        .order_by(Notification.created_at.desc())
+        .first()
+    )
+    if recent_notif and (datetime.utcnow() - recent_notif.created_at).days < 3:
+        return  # already nudged recently, don't spam
+
+    next_skill = next((s.skill_name for s in skills if not s.completed), None)
+    days_str = f"{(datetime.utcnow() - last_activity).days} days" if last_activity else "a while"
+    message = f"You haven't updated your roadmap in {days_str}."
+    if next_skill:
+        message += f" Recommended: Complete {next_skill}."
+
+    db.add(Notification(user_id=user_id, message=message))
+    db.commit()
+
+
+def get_notifications(db: Session, user_id: int, unread_only: bool = False) -> List[Notification]:
+    query = db.query(Notification).filter(Notification.user_id == user_id)
+    if unread_only:
+        query = query.filter(Notification.is_read == False)  # noqa: E712
+    return query.order_by(Notification.created_at.desc()).all()
+
+
+def mark_notification_read(db: Session, notification_id: int) -> None:
+    row = db.query(Notification).filter(Notification.id == notification_id).first()
+    if row:
+        row.is_read = True
+        db.commit()
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Admin Analytics Dashboard (Deliverable 6) - expanded
+# --------------------------------------------------------------------------
+
+def get_admin_analytics(db: Session) -> dict:
+    total_users = db.query(User).count()
+
+    since_7d = datetime.utcnow() - timedelta(days=7)
+    since_14d = datetime.utcnow() - timedelta(days=14)
+
+    active_last_7d = {
+        a.user_id for a in db.query(UserActivity)
+        .filter(UserActivity.created_at >= since_7d, UserActivity.user_id.isnot(None)).all()
+    }
+    active_prior_7d = {
+        a.user_id for a in db.query(UserActivity)
+        .filter(UserActivity.created_at >= since_14d, UserActivity.created_at < since_7d,
+                UserActivity.user_id.isnot(None)).all()
+    }
+
+    # Simple retention proxy: of users active in the PRIOR week, what % came back this week
+    retention_pct = None
+    if active_prior_7d:
+        retained = active_prior_7d & active_last_7d
+        retention_pct = round((len(retained) / len(active_prior_7d)) * 100, 1)
+
+    base_summary = get_analytics_summary(db)
+
+    # Top 5 careers + top 5 missing skills, for bar chart / heatmap use
+    from collections import Counter
+    all_recs = db.query(CareerRecommendation).all()
+    career_counts = Counter(r.career for r in all_recs)
+    top_careers = career_counts.most_common(5)
+
+    skill_counts = Counter()
+    for r in all_recs:
+        if r.missing_skills:
+            skill_counts.update(s.strip() for s in r.missing_skills.split(",") if s.strip())
+    top_missing_skills = skill_counts.most_common(5)
+
+    return {
+        "total_users": total_users,
+        "active_users_7d": len(active_last_7d),
+        "retention_pct": retention_pct,
+        "average_resume_score": base_summary["average_resume_score"],
+        "average_feedback_rating": get_average_feedback_rating(db),
+        "top_careers": [{"career": c, "count": n} for c, n in top_careers],
+        "top_missing_skills": [{"skill": s, "count": n} for s, n in top_missing_skills],
     }
