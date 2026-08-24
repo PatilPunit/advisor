@@ -37,7 +37,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from recommender import recommend_career
-from project import get_project_details
+from project_bank import get_project_details
 from skills_vocab import (
     load_master_vocabulary, find_skills_in_text,
     infer_all_mentioned_careers, strip_career_mentions, CAREER_NAMES,
@@ -261,7 +261,7 @@ def _build_informational_fallback(mentioned_careers: List[str]) -> str:
             f"and I can show you exactly how close you are to this path."
         )
     return (
-        "Coding in languages like Python, R, or SQL.Math, logic, and stats knowledge.Using data tools like Tableau or Power BI.Clear talking and teamwork skillI'm having trouble reaching my reasoning engine right now - try again in a moment. "
+        "I'm having trouble reaching my reasoning engine right now - try again in a moment. "
         f"In the meantime, feel free to ask about any of these paths: {', '.join(CAREER_NAMES)}."
     )
 
@@ -338,3 +338,59 @@ def answer_career_question(
         "missing_skills": facts["missing_skills"],
         "suggested_project": facts["suggested_project"],
     }
+
+
+def answer_companion_question(question: str, context: Dict, conversation_history: Optional[List[Dict]] = None) -> str:
+    """
+    Deliverable 8: AI Learning Companion.
+
+    Unlike answer_career_question() (which only knows whatever skills are
+    mentioned in the current message), this knows the user's FULL profile:
+    resume score, roadmap position, completed/remaining projects, and
+    career goal - pulled from their real account data. This is what makes
+    "what project should I do next?" answerable with something genuinely
+    useful ("Customer Churn Prediction is your natural next step because
+    you've completed X and Y already") instead of a generic suggestion any
+    chatbot could give.
+
+    `context` is built by main.py from real DB data - this function never
+    invents any of it, only reasons over what's handed to it.
+    """
+    history_block = ""
+    if conversation_history:
+        turns = [f"Student asked: {t['question']}\nYou answered: {t['answer']}" for t in conversation_history[-4:]]
+        history_block = "Previous conversation:\n" + "\n\n".join(turns) + "\n\n"
+
+    prompt = f"""{history_block}You are this student's personal learning companion. Here is their COMPLETE current profile - use it to give specific, grounded advice, not generic chatbot answers:
+
+- Career goal: {context.get('career_goal') or 'not set yet'}
+- Roadmap progress: {context.get('roadmap_progress', 0)}% ({context.get('completed_skills_count', 0)}/{context.get('total_skills_count', 0)} skills)
+- Remaining roadmap skills, in order: {context.get('remaining_skills') or 'none - roadmap complete'}
+- Completed projects: {context.get('completed_projects') or 'none yet'}
+- Remaining/suggested projects: {context.get('remaining_projects') or 'none tracked yet'}
+- Latest resume intelligence score: {context.get('resume_score', 'not uploaded yet')}
+- Resume weaknesses on file: {context.get('resume_weaknesses') or 'none noted'}
+
+Student's question: "{question}"
+
+Answer specifically using the profile above - name the actual next skill or project from their real data when relevant, don't give generic advice a person with no context could give. Keep it conversational, 3-5 sentences, and end with one concrete next action."""
+
+    llm_answer = call_groq(prompt)
+    if llm_answer:
+        return llm_answer
+
+    # Fallback if Groq unreachable - still genuinely useful, uses real data
+    if context.get("remaining_projects"):
+        next_project = context["remaining_projects"][0]
+        return (
+            f"Based on your current progress ({context.get('roadmap_progress', 0)}% through your "
+            f"{context.get('career_goal', 'career')} roadmap), I'd suggest tackling \"{next_project}\" next. "
+            f"It fits naturally with what you've already completed."
+        )
+    if context.get("remaining_skills"):
+        next_skill = context["remaining_skills"][0]
+        return (
+            f"You're {context.get('roadmap_progress', 0)}% through your roadmap - "
+            f"\"{next_skill}\" is your next skill to tackle."
+        )
+    return "I'm having trouble reaching my reasoning engine right now - try again in a moment."
