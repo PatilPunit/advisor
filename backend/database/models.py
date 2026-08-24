@@ -47,6 +47,7 @@ class UserSkill(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     skill_name = Column(String, nullable=False)
     completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)  # Phase 11: needed for weekly reports + staleness checks
 
     user = relationship("User", back_populates="skills")
 
@@ -58,6 +59,7 @@ class UserProject(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     project_name = Column(String, nullable=False)
     completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="projects")
 
@@ -139,7 +141,67 @@ class ProjectRecommendation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    project_name = Column(String, nullable=False)
+    project_name = Column(String, nullable=True)
     domain = Column(String, nullable=True)
     difficulty = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Platform Intelligence & Ecosystem
+# --------------------------------------------------------------------------
+
+class CareerProfile(Base):
+    """
+    Deliverable 1: Career Twin. One row per user - their persistent 'Career
+    DNA'. Recomputed and upserted every time the readiness score is
+    calculated (dashboard visit, skill/project toggle, resume upload).
+    """
+    __tablename__ = "career_profile"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    target_career = Column(String, nullable=True)
+    current_score = Column(Integer, default=0)      # readiness score, 0-100
+    readiness_score = Column(Integer, default=0)     # kept as a distinct field per spec; mirrors current_score today
+    skill_count = Column(Integer, default=0)
+    project_count = Column(Integer, default=0)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CareerScoreSnapshot(Base):
+    """
+    Historical readiness-score snapshots - powers weekly report deltas
+    ("Career Score: +8") and trend charts. Without storing history, "how
+    much did I improve this week" is structurally impossible to answer.
+    """
+    __tablename__ = "career_score_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    score = Column(Integer, nullable=False)
+    snapshot_date = Column(DateTime, default=datetime.utcnow)
+
+
+class RecommendationFeedback(Base):
+    """Deliverable 5: user ratings on recommendations (roadmap, project, mentor answer, etc.)."""
+    __tablename__ = "recommendation_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    recommendation_type = Column(String, nullable=False)  # e.g. "roadmap", "project", "mentor_answer"
+    reference = Column(String, nullable=True)  # e.g. the career/project name being rated
+    rating = Column(Integer, nullable=False)   # 1-5 stars
+    comment = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Notification(Base):
+    """Deliverable 7: in-app notifications (staleness nudges, milestones, etc.)."""
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    message = Column(String, nullable=False)
+    is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
