@@ -37,7 +37,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from recommender import recommend_career
-from project_bank import get_project_details
+from project import get_project_details
 from skills_vocab import (
     load_master_vocabulary, find_skills_in_text,
     infer_all_mentioned_careers, strip_career_mentions, CAREER_NAMES,
