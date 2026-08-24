@@ -6,17 +6,20 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from recommender import recommend_career
-from roadmap1 import get_roadmap, generate_dynamic_roadmap
+from roadmap import get_roadmap, generate_dynamic_roadmap
 from project import get_projects_for_career
 from resume.parser import extract_text_from_pdf
 from resume.extractor import extract_skills
 from resume.scorer import calculate_score
 from resume.intelligence import evaluate_resume
 
-from ai_mentor import answer_career_question
+from ai_mentor import answer_career_question, answer_companion_question
 from job_match import extract_job_skills, match_resume_to_job
 from project_generator import generate_project
 from learning_time import estimate_learning_time
+from career_twin import compute_readiness_score, simulate_learning_path
+from skill_graph import generate_skill_graph
+from recommender_ml import recommend_career_v2
 
 from database.db import Base, engine, get_db
 from database import crud, schemas
@@ -389,3 +392,220 @@ def learning_time(request: schemas.LearningTimeRequest):
 def analytics_summary(db: Session = Depends(get_db)):
     data = crud.get_analytics_summary(db)
     return schemas.AnalyticsSummaryResponse(**data)
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - internal helper: gathers everything needed for readiness
+# scoring / career twin / companion, from real DB data only
+# --------------------------------------------------------------------------
+
+def _build_user_profile_context(db: Session, user_id: int) -> dict:
+    user = crud.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"No user with id {user_id}")
+
+    skills = crud.get_user_skills(db, user_id)
+    completed_skill_names = [s.skill_name for s in skills if s.completed]
+    remaining_skill_names = [s.skill_name for s in skills if not s.completed]
+    total_skills = len(skills)
+
+    projects = crud.get_user_projects(db, user_id)
+    completed_project_names = [p.project_name for p in projects if p.completed]
+    remaining_project_names = [p.project_name for p in projects if not p.completed]
+    total_projects = len(projects)
+
+    history = crud.get_resume_history(db, user_id)
+    resume_score = history[-1].score if history else None
+
+    job_match_score = crud.get_latest_job_match_score(db, user_id)
+
+    return {
+        "user": user,
+        "career_goal": user.career_goal,
+        "completed_skills": completed_skill_names,
+        "remaining_skills": remaining_skill_names,
+        "total_skills_count": total_skills,
+        "completed_projects": completed_project_names,
+        "remaining_projects": remaining_project_names,
+        "total_projects_count": total_projects,
+        "resume_score": resume_score,
+        "job_match_score": job_match_score,
+    }
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 1 & 2: Career Twin + Readiness Score
+# --------------------------------------------------------------------------
+
+@app.get("/career-twin/{user_id}", response_model=schemas.CareerTwinResponse)
+def career_twin(user_id: int, db: Session = Depends(get_db)):
+    ctx = _build_user_profile_context(db, user_id)
+
+    if not ctx["career_goal"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Set a career goal first (POST /users/{user_id}/goal) before generating a Career Twin.",
+        )
+
+    score_result = compute_readiness_score(
+        target_career=ctx["career_goal"],
+        completed_skills=ctx["completed_skills"],
+        total_roadmap_skills=ctx["total_skills_count"],
+        completed_roadmap_count=len(ctx["completed_skills"]),
+        total_projects=ctx["total_projects_count"],
+        completed_projects=len(ctx["completed_projects"]),
+        latest_resume_score=ctx["resume_score"],
+        latest_job_match_score=ctx["job_match_score"],
+    )
+
+    crud.upsert_career_profile(
+        db, user_id, ctx["career_goal"], score_result["total"],
+        len(ctx["completed_skills"]), len(ctx["completed_projects"]),
+    )
+    crud.add_score_snapshot_if_new_day(db, user_id, score_result["total"])
+
+    return schemas.CareerTwinResponse(
+        name=ctx["user"].name,
+        target_career=ctx["career_goal"],
+        current_skills=ctx["completed_skills"],
+        readiness_score=score_result["total"],
+        readiness_breakdown=score_result["breakdown"],
+        resume_score=ctx["resume_score"],
+        project_count=len(ctx["completed_projects"]),
+        skill_count=len(ctx["completed_skills"]),
+    )
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 3: Career Simulator
+# --------------------------------------------------------------------------
+
+@app.post("/career-simulator", response_model=List[schemas.SimulatorStep])
+def career_simulator(request: schemas.SimulatorRequest, db: Session = Depends(get_db)):
+    ctx = _build_user_profile_context(db, request.user_id)
+    if not ctx["career_goal"]:
+        raise HTTPException(status_code=400, detail="Set a career goal first before simulating.")
+
+    steps = simulate_learning_path(
+        target_career=ctx["career_goal"],
+        current_skills=ctx["completed_skills"],
+        hypothetical_skills_in_order=request.hypothetical_skills,
+        total_roadmap_skills=ctx["total_skills_count"],
+        completed_roadmap_count=len(ctx["completed_skills"]),
+        total_projects=ctx["total_projects_count"],
+        completed_projects=len(ctx["completed_projects"]),
+        latest_resume_score=ctx["resume_score"],
+        latest_job_match_score=ctx["job_match_score"],
+    )
+    return steps
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 4: Learning Analytics Engine (weekly report)
+# --------------------------------------------------------------------------
+
+@app.get("/learning-report/{user_id}", response_model=schemas.WeeklyReportResponse)
+def learning_report(user_id: int, db: Session = Depends(get_db)):
+    report = crud.get_weekly_report(db, user_id)
+    return schemas.WeeklyReportResponse(**report)
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 5: Recommendation Feedback Loop
+# --------------------------------------------------------------------------
+
+@app.post("/feedback")
+def submit_feedback(request: schemas.FeedbackRequest, db: Session = Depends(get_db)):
+    if not (1 <= request.rating <= 5):
+        raise HTTPException(status_code=400, detail="rating must be between 1 and 5")
+    row = crud.add_feedback(
+        db, request.user_id, request.recommendation_type,
+        request.reference, request.rating, request.comment,
+    )
+    return {"success": True, "feedback_id": row.id}
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 6: Admin Analytics Dashboard
+# --------------------------------------------------------------------------
+
+@app.get("/admin/analytics", response_model=schemas.AdminAnalyticsResponse)
+def admin_analytics(db: Session = Depends(get_db)):
+    data = crud.get_admin_analytics(db)
+    return schemas.AdminAnalyticsResponse(**data)
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 7: Notification Engine
+# --------------------------------------------------------------------------
+
+@app.get("/notifications/{user_id}", response_model=List[schemas.NotificationOut])
+def notifications(user_id: int, db: Session = Depends(get_db)):
+    crud.generate_notifications_if_needed(db, user_id)
+    return crud.get_notifications(db, user_id)
+
+
+@app.post("/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: int, db: Session = Depends(get_db)):
+    crud.mark_notification_read(db, notification_id)
+    return {"success": True}
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 8: AI Learning Companion
+# --------------------------------------------------------------------------
+
+@app.post("/companion/chat", response_model=schemas.CompanionChatResponse)
+def companion_chat(request: schemas.CompanionChatRequest, db: Session = Depends(get_db)):
+    ctx = _build_user_profile_context(db, request.user_id)
+
+    roadmap_progress = (
+        round((len(ctx["completed_skills"]) / ctx["total_skills_count"]) * 100)
+        if ctx["total_skills_count"] else 0
+    )
+
+    context = {
+        "career_goal": ctx["career_goal"],
+        "roadmap_progress": roadmap_progress,
+        "completed_skills_count": len(ctx["completed_skills"]),
+        "total_skills_count": ctx["total_skills_count"],
+        "remaining_skills": ctx["remaining_skills"],
+        "completed_projects": ctx["completed_projects"],
+        "remaining_projects": ctx["remaining_projects"],
+        "resume_score": ctx["resume_score"],
+        "resume_weaknesses": None,
+    }
+
+    past_chats = crud.get_mentor_history(db, request.user_id)
+    conversation_history = (
+        [{"question": c.question, "answer": c.answer} for c in past_chats] if past_chats else None
+    )
+
+    answer = answer_companion_question(request.question, context, conversation_history)
+    crud.log_mentor_chat(db, request.user_id, request.question, answer, ctx["career_goal"])
+
+    return schemas.CompanionChatResponse(answer=answer)
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 9: Skill Graph
+# --------------------------------------------------------------------------
+
+@app.get("/skill-graph/{career}", response_model=schemas.SkillGraphResponse)
+def skill_graph(career: str):
+    graph = generate_skill_graph(career)
+    if not graph["nodes"]:
+        raise HTTPException(status_code=404, detail=f"No roadmap found for career '{career}'")
+    return schemas.SkillGraphResponse(**graph)
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Deliverable 10: ML Recommendation Engine v2
+# --------------------------------------------------------------------------
+
+@app.post("/recommend-v2", response_model=List[schemas.RecommendV2Result])
+def recommend_v2(request: schemas.RecommendV2Request):
+    if not request.skills:
+        raise HTTPException(status_code=400, detail="skills list cannot be empty")
+    results = recommend_career_v2(request.skills, request.interest, top_n=5)
+    return [schemas.RecommendV2Result(**r) for r in results]
