@@ -215,3 +215,119 @@ class AnalyticsSummaryResponse(BaseModel):
     most_missing_skill: Optional[str]
     average_resume_score: Optional[float]
     daily_active_users: int
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Career Twin + Readiness Score + Simulator
+# --------------------------------------------------------------------------
+
+class CareerTwinResponse(BaseModel):
+    name: str
+    target_career: Optional[str]
+    current_skills: List[str]
+    readiness_score: int
+    readiness_breakdown: dict
+    resume_score: Optional[int]
+    project_count: int
+    skill_count: int
+
+
+class SimulatorRequest(BaseModel):
+    user_id: int
+    hypothetical_skills: List[str]
+
+
+class SimulatorStep(BaseModel):
+    label: str
+    score: int
+    skill_added: Optional[str] = None
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Learning Analytics (weekly report)
+# --------------------------------------------------------------------------
+
+class WeeklyReportResponse(BaseModel):
+    skills_completed: List[str]
+    projects_completed: List[str]
+    engagement_days: int
+    career_score_delta: Optional[int]
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Recommendation Feedback Loop
+# --------------------------------------------------------------------------
+
+class FeedbackRequest(BaseModel):
+    user_id: Optional[int] = None
+    recommendation_type: str
+    reference: Optional[str] = None
+    rating: int
+    comment: Optional[str] = None
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Notification Engine
+# --------------------------------------------------------------------------
+
+class NotificationOut(BaseModel):
+    id: int
+    message: str
+    is_read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Admin Analytics Dashboard
+# --------------------------------------------------------------------------
+
+class AdminAnalyticsResponse(BaseModel):
+    total_users: int
+    active_users_7d: int
+    retention_pct: Optional[float]
+    average_resume_score: Optional[float]
+    average_feedback_rating: Optional[float]
+    top_careers: List[dict]
+    top_missing_skills: List[dict]
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - AI Learning Companion
+# --------------------------------------------------------------------------
+
+class CompanionChatRequest(BaseModel):
+    user_id: int
+    question: str
+
+
+class CompanionChatResponse(BaseModel):
+    answer: str
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - Skill Graph
+# --------------------------------------------------------------------------
+
+class SkillGraphResponse(BaseModel):
+    nodes: List[str]
+    edges: List[dict]
+
+
+# --------------------------------------------------------------------------
+# Phase 11 - ML Recommendation Engine v2
+# --------------------------------------------------------------------------
+
+class RecommendV2Request(BaseModel):
+    skills: List[str]
+    interest: Optional[str] = None
+
+
+class RecommendV2Result(BaseModel):
+    career: str
+    rule_based_score: float
+    ml_score: float
+    blended_score: float
+    missing_skills: List[str]
