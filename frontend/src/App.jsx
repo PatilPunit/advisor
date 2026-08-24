@@ -14,8 +14,19 @@ import JobMatch from "./components/JobMatch";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 import ProjectGenerator from "./components/ProjectGenerator";
 import LearningTimeEstimator from "./components/LearningTimeEstimator";
+import CareerTwin from "./components/CareerTwin";
+import CareerSimulator from "./components/CareerSimulator";
+import WeeklyReport from "./components/WeeklyReport";
+import NotificationBanner from "./components/NotificationBanner";
+import SkillGraphView from "./components/SkillGraphView";
+import AdminDashboard from "./components/AdminDashboard";
+import FeedbackStars from "./components/FeedbackStars";
 
-const TABS = ["Advisor", "Mentor", "Resume", "Job Match", "Projects", "Timeline", "Analytics"];
+const TABS = [
+  "Advisor", "Career Twin", "Simulator", "Mentor", "Companion",
+  "Resume", "Job Match", "Projects", "Timeline", "Skill Graph",
+  "Analytics", "Admin",
+];
 
 function App() {
   const [user, setUser] = useState(null);
@@ -45,6 +56,8 @@ function App() {
 
       {user && (
         <>
+          <NotificationBanner userId={user.id} />
+
           <div style={styles.tabRow}>
             {TABS.map((tab) => (
               <button
@@ -82,6 +95,9 @@ function App() {
                   </section>
                   <section>
                     <RoadmapCard roadmap={result.roadmap} />
+                    <div style={{ marginTop: "10px" }}>
+                      <FeedbackStars userId={user.id} recommendationType="roadmap" reference={result.career} />
+                    </div>
                   </section>
                   <section>
                     <h2 style={styles.sectionHeading}>Recommended Projects</h2>
@@ -101,12 +117,44 @@ function App() {
             </>
           )}
 
+          {activeTab === "Career Twin" && (
+            <CareerTwin userId={user.id} refreshKey={dashboardKey} />
+          )}
+
+          {activeTab === "Simulator" && <CareerSimulator userId={user.id} />}
+
           {activeTab === "Mentor" && <MentorChat userId={user.id} />}
+
+          {activeTab === "Companion" && (
+            <MentorChat
+              userId={user.id}
+              endpoint="http://127.0.0.1:8000/companion/chat"
+              title="AI Learning Companion"
+              subtitle="I know your resume, roadmap, projects, and career goal - ask me things like 'what project should I do next?'"
+            />
+          )}
+
           {activeTab === "Resume" && <ResumeUpload userId={user.id} />}
           {activeTab === "Job Match" && <JobMatch userId={user.id} />}
-          {activeTab === "Projects" && <ProjectGenerator userId={user.id} />}
+          {activeTab === "Projects" && (
+            <>
+              <ProjectGenerator userId={user.id} />
+              <div style={{ maxWidth: "720px", width: "100%" }}>
+                <FeedbackStars userId={user.id} recommendationType="project" />
+              </div>
+            </>
+          )}
           {activeTab === "Timeline" && <LearningTimeEstimator />}
-          {activeTab === "Analytics" && <AnalyticsDashboard />}
+          {activeTab === "Skill Graph" && <SkillGraphView />}
+
+          {activeTab === "Analytics" && (
+            <>
+              <WeeklyReport userId={user.id} />
+              <AnalyticsDashboard />
+            </>
+          )}
+
+          {activeTab === "Admin" && <AdminDashboard />}
         </>
       )}
     </div>
@@ -139,7 +187,9 @@ const styles = {
     fontWeight: 600,
     color: "#f5f5f5",
     backgroundColor: "#262626",
-    border: "1px solid #333",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#333",
     borderRadius: "6px",
     cursor: "pointer",
   },
