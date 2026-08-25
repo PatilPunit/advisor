@@ -1,0 +1,8 @@
+# Prometheus scrape config - pulls metrics from the FastAPI backend every 15s
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "career_advisor_backend"
+    static_configs:
+      - targets: ["backend:8000"]
