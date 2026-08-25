@@ -49,11 +49,18 @@ def get_user(db: Session, user_id: int) -> Optional[User]:
     return db.query(User).filter(User.id == user_id).first()
 
 
-def create_user(db: Session, name: str, email: str, password: str) -> User:
+VALID_ROLES = {"student", "mentor", "admin"}
+
+
+def create_user(db: Session, name: str, email: str, password: str, role: str = "student") -> User:
+    if role not in VALID_ROLES:
+        role = "student"  # never let an invalid/unexpected role silently grant elevated access
+
     user = User(
         name=name,
         email=email,
         hashed_password=hash_password(password),
+        role=role,
     )
     db.add(user)
     db.commit()
@@ -585,6 +592,7 @@ def get_admin_analytics(db: Session) -> dict:
 
     since_7d = datetime.utcnow() - timedelta(days=7)
     since_14d = datetime.utcnow() - timedelta(days=14)
+    since_30d = datetime.utcnow() - timedelta(days=30)
 
     active_last_7d = {
         a.user_id for a in db.query(UserActivity)
@@ -595,6 +603,10 @@ def get_admin_analytics(db: Session) -> dict:
         .filter(UserActivity.created_at >= since_14d, UserActivity.created_at < since_7d,
                 UserActivity.user_id.isnot(None)).all()
     }
+    active_last_30d = {
+        a.user_id for a in db.query(UserActivity)
+        .filter(UserActivity.created_at >= since_30d, UserActivity.user_id.isnot(None)).all()
+    }
 
     # Simple retention proxy: of users active in the PRIOR week, what % came back this week
     retention_pct = None
@@ -602,9 +614,16 @@ def get_admin_analytics(db: Session) -> dict:
         retained = active_prior_7d & active_last_7d
         retention_pct = round((len(retained) / len(active_prior_7d)) * 100, 1)
 
+    # Deliverable 11: SaaS Analytics - Conversion Rate.
+    # "Conversion" here means: of everyone who registered, what % actually
+    # set a career goal (i.e. engaged past signup into real product use) -
+    # a defensible, honestly-measurable proxy since this product has no
+    # separate "paid" tier yet to convert into.
+    users_with_goal = db.query(User).filter(User.career_goal.isnot(None)).count()
+    conversion_rate_pct = round((users_with_goal / total_users) * 100, 1) if total_users else None
+
     base_summary = get_analytics_summary(db)
 
-    # Top 5 careers + top 5 missing skills, for bar chart / heatmap use
     from collections import Counter
     all_recs = db.query(CareerRecommendation).all()
     career_counts = Counter(r.career for r in all_recs)
@@ -619,7 +638,9 @@ def get_admin_analytics(db: Session) -> dict:
     return {
         "total_users": total_users,
         "active_users_7d": len(active_last_7d),
+        "active_users_30d": len(active_last_30d),
         "retention_pct": retention_pct,
+        "conversion_rate_pct": conversion_rate_pct,
         "average_resume_score": base_summary["average_resume_score"],
         "average_feedback_rating": get_average_feedback_rating(db),
         "top_careers": [{"career": c, "count": n} for c, n in top_careers],
