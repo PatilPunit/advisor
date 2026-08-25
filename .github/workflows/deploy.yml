@@ -1,0 +1,42 @@
+# .github/workflows/deploy.yml
+# Manually-triggered deploy (or auto-trigger on a "release" tag, if you
+# prefer). Kept separate from ci.yml on purpose: deployment should be a
+# deliberate action after you've seen CI go green, not an automatic side
+# effect of every push to main.
+#
+# This is a TEMPLATE - the actual deploy step depends on which host you
+# pick in Deliverable 12 (Render, Railway, Vercel all differ). The Render
+# example below uses their deploy-hook URL, the simplest option requiring
+# no CLI/API key stored in GitHub Secrets beyond one webhook URL.
+
+name: Deploy
+
+on:
+  workflow_dispatch:   # manual trigger from the GitHub Actions tab
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hook
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        # Add RENDER_DEPLOY_HOOK_URL in: GitHub repo -> Settings -> Secrets
+        # and variables -> Actions. Get the URL from Render's dashboard:
+        # your service -> Settings -> Deploy Hook.
+
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: ./frontend
+          vercel-args: "--prod"
