@@ -1,0 +1,32 @@
+# render.yaml - Render Blueprint for the backend + managed Postgres + Redis
+# Deploy: connect your GitHub repo at render.com, it auto-detects this file.
+services:
+  - type: web
+    name: career-advisor-backend
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: career-advisor-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false   # set manually in Render's dashboard - never commit real keys to git
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: career-advisor-redis
+          property: connectionString
+
+  - type: redis
+    name: career-advisor-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: career-advisor-db
+    plan: free
