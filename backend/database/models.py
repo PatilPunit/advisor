@@ -33,7 +33,8 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     career_goal = Column(String, nullable=True)  # e.g. "ML Engineer"
-    created_at = Column(DateTime, default=datetime.utcnow)
+    role = Column(String, nullable=False, default="student", index=True)  # "student" | "mentor" | "admin"
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     skills = relationship("UserSkill", back_populates="user", cascade="all, delete-orphan")
     projects = relationship("UserProject", back_populates="user", cascade="all, delete-orphan")
