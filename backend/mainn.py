@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from recommender import recommend_career
-from roadmap1 import get_roadmap, generate_dynamic_roadmap
+from roadmap import get_roadmap, generate_dynamic_roadmap
 from project import get_projects_for_career
 from resume.parser import extract_text_from_pdf
 from resume.extractor import extract_skills
@@ -23,6 +23,9 @@ from recommender_ml import recommend_career_v2
 
 from database.db import Base, engine, get_db
 from database import crud, schemas
+from auth import create_access_token, get_current_user, verify_same_user_or_admin, require_role
+from logging_config import logger, log_user_login, log_resume_upload, log_roadmap_generation, log_job_match, log_error
+from file_storage import save_resume_file
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,6 +38,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Deliverable 4: Monitoring - exposes GET /metrics in Prometheus's scrape
+# format, tracking request count, error rate (by status code), and
+# response time percentiles automatically for every endpoint - no manual
+# instrumentation needed per-route.
+from prometheus_fastapi_instrumentator import Instrumentator
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
 # --------------------------------------------------------------------------
@@ -157,6 +167,8 @@ async def resume_analyze(
         if user is None:
             raise HTTPException(status_code=404, detail=f"No user with id {user_id}")
         crud.add_resume_score(db, user_id, intelligence["score"])
+        save_resume_file(user_id, file.filename, file_bytes)  # Deliverable 9: versioned storage
+        log_resume_upload(user_id, file.filename, intelligence["score"])  # Deliverable 5
     crud.log_resume_analyze_activity(db, user_id)
 
     return ResumeAnalyzeResponse(
@@ -178,7 +190,14 @@ async def resume_analyze(
 def register(request: schemas.UserCreate, db: Session = Depends(get_db)):
     if crud.get_user_by_email(db, request.email):
         raise HTTPException(status_code=400, detail="An account with this email already exists")
-    user = crud.create_user(db, request.name, request.email, request.password)
+
+    # SECURITY: public registration can never grant "admin" - that would be
+    # a privilege-escalation hole (anyone could just POST role="admin").
+    # Admin accounts must be created directly in the database or promoted
+    # by an existing admin via a separate authenticated action.
+    safe_role = request.role if request.role in ("student", "mentor") else "student"
+
+    user = crud.create_user(db, request.name, request.email, request.password, safe_role)
     return user
 
 
@@ -186,8 +205,14 @@ def register(request: schemas.UserCreate, db: Session = Depends(get_db)):
 def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = crud.authenticate_user(db, request.email, request.password)
     if not user:
+        log_user_login(request.email, success=False)
         return schemas.LoginResponse(success=False, message="Invalid email or password")
-    return schemas.LoginResponse(success=True, user_id=user.id, name=user.name)
+
+    log_user_login(request.email, success=True)
+    token = create_access_token(user.id, user.email, user.role)
+    return schemas.LoginResponse(
+        success=True, user_id=user.id, name=user.name, role=user.role, access_token=token,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -224,7 +249,7 @@ def update_project(user_id: int, request: schemas.ProjectUpdateRequest, db: Sess
 
 
 @app.get("/dashboard/{user_id}", response_model=schemas.DashboardResponse)
-def dashboard(user_id: int, db: Session = Depends(get_db)):
+def dashboard(user_id: int, db: Session = Depends(get_db), current_user=Depends(verify_same_user_or_admin)):
     try:
         data = crud.get_dashboard_data(db, user_id)
     except ValueError as e:
@@ -327,6 +352,7 @@ async def job_match(
 
     result = match_resume_to_job(resume_skills, job_skills)
     crud.log_job_match(db, user_id, result["match_score"], result["missing_keywords"])
+    log_job_match(user_id, result["match_score"])
 
     response = schemas.JobMatchResponse(**result)
     if job_result["used_inference"]:
@@ -438,7 +464,7 @@ def _build_user_profile_context(db: Session, user_id: int) -> dict:
 # --------------------------------------------------------------------------
 
 @app.get("/career-twin/{user_id}", response_model=schemas.CareerTwinResponse)
-def career_twin(user_id: int, db: Session = Depends(get_db)):
+def career_twin(user_id: int, db: Session = Depends(get_db), current_user=Depends(verify_same_user_or_admin)):
     ctx = _build_user_profile_context(db, user_id)
 
     if not ctx["career_goal"]:
@@ -530,7 +556,7 @@ def submit_feedback(request: schemas.FeedbackRequest, db: Session = Depends(get_
 # --------------------------------------------------------------------------
 
 @app.get("/admin/analytics", response_model=schemas.AdminAnalyticsResponse)
-def admin_analytics(db: Session = Depends(get_db)):
+def admin_analytics(db: Session = Depends(get_db), current_user=Depends(require_role("admin"))):
     data = crud.get_admin_analytics(db)
     return schemas.AdminAnalyticsResponse(**data)
 
