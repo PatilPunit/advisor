@@ -20,6 +20,7 @@ class UserCreate(BaseModel):
     name: str
     email: EmailStr
     password: str
+    role: str = "student"  # "student" | "mentor" | "admin" - Deliverable 7
 
 
 class UserOut(BaseModel):
@@ -27,6 +28,7 @@ class UserOut(BaseModel):
     name: str
     email: str
     career_goal: Optional[str] = None
+    role: str
     created_at: datetime
 
     class Config:
@@ -46,6 +48,9 @@ class LoginResponse(BaseModel):
     success: bool
     user_id: Optional[int] = None
     name: Optional[str] = None
+    role: Optional[str] = None
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
     message: Optional[str] = None
 
 
@@ -287,7 +292,9 @@ class NotificationOut(BaseModel):
 class AdminAnalyticsResponse(BaseModel):
     total_users: int
     active_users_7d: int
+    active_users_30d: int
     retention_pct: Optional[float]
+    conversion_rate_pct: Optional[float]
     average_resume_score: Optional[float]
     average_feedback_rating: Optional[float]
     top_careers: List[dict]
