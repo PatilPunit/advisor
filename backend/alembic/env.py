@@ -33,13 +33,13 @@ from database.db import Base
 from database import models  # noqa: F401 - import registers every model on Base.metadata
 
 config = context.config
-DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/career_advisor"
+DATABASE_URL="postgresql://postgres:future@localhost:5432/career_advisor"
 database_url = os.getenv("DATABASE_URL")
 if not database_url:
     raise RuntimeError(
         f"DATABASE_URL not found. Checked for a .env file at: {os.path.join(BACKEND_DIR, '.env')}\n"
         f"Make sure that file exists and contains a line like:\n"
-        f"  DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/career_advisor"
+        f"  DATABASE_URL=postgresql://postgres:future@localhost:5432/career_advisor"
     )
 config.set_main_option("sqlalchemy.url", database_url)
 
