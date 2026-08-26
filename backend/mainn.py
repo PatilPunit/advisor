@@ -22,7 +22,7 @@ from skill_graph import generate_skill_graph
 from recommender_ml import recommend_career_v2
 
 from database.db import Base, engine, get_db
-from database import crud, schemas
+from database import crud, sc
 from auth import create_access_token, get_current_user, verify_same_user_or_admin, require_role
 from logging_config import logger, log_user_login, log_resume_upload, log_roadmap_generation, log_job_match, log_error
 from file_storage import save_resume_file
