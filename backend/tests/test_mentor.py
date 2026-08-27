@@ -29,8 +29,11 @@ def test_general_intent_when_neither_matches():
 
 def test_skill_extraction_finds_real_skills():
     skills = _extract_mentioned_skills("I know Python and SQL")
+    print(skills)
     assert "Python" in skills
     assert "SQL" in skills
+    
+
 
 
 def test_career_mentioned_in_question_not_credited_as_skill():

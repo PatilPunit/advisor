@@ -33,7 +33,7 @@ def test_db(tmp_path):
 @pytest.fixture
 def client(test_db):
     """FastAPI TestClient wired to the isolated test database."""
-    from main import app
+    from mainn import app
     from fastapi.testclient import TestClient
     from database.db import Base
     import database.db as dbmod

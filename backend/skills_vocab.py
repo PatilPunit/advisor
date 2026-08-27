@@ -20,7 +20,7 @@ import re
 from typing import List, Set
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CAREER_PATHS_CSV = os.path.join(BASE_DIR, "dataset", "career_paths.csv")
+CAREER_PATHS_CSV = os.path.join("/home/punit/Downloads/Mint/AI_career_advisor/dataset/career_paths.csv")
 
 # Common tech/tooling keywords that appear constantly in job descriptions
 # and resumes but may not be an exact "required_skill" for any one career
