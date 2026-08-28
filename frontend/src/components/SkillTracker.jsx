@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-function SkillTracker({ userId, onProgressChange }) {
+function SkillTracker({ userId, token, onProgressChange }) {
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -10,7 +10,9 @@ function SkillTracker({ userId, onProgressChange }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`http://127.0.0.1:8000/users/${userId}/skills`);
+      const response = await fetch(`http://127.0.0.1:8000/users/${userId}/skills`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!response.ok) throw new Error("Could not load your roadmap skills");
       const data = await response.json();
       setSkills(data);
@@ -39,7 +41,7 @@ function SkillTracker({ userId, onProgressChange }) {
     try {
       const response = await fetch(`http://127.0.0.1:8000/users/${userId}/skills`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ skill_name: skill.skill_name, completed: newCompleted }),
       });
       if (!response.ok) throw new Error("Could not save progress");
