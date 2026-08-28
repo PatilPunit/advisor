@@ -75,9 +75,9 @@ function App() {
 
           {activeTab === "Advisor" && (
             <>
-              <GoalForm userId={user.id} currentGoal={null} onGoalSet={refreshDashboard} />
-              <SkillTracker key={`tracker-${dashboardKey}`} userId={user.id} onProgressChange={refreshDashboard} />
-              <Dashboard key={`dashboard-${dashboardKey}`} userId={user.id} />
+              <GoalForm userId={user.id} token={user.token} currentGoal={null} onGoalSet={refreshDashboard} />
+              <SkillTracker key={`tracker-${dashboardKey}`} userId={user.id} token={user.token} onProgressChange={refreshDashboard} />
+              <Dashboard key={`dashboard-${dashboardKey}`} userId={user.id} token={user.token} />
 
               <SkillForm onResult={setResult} />
               {result && (
@@ -118,7 +118,7 @@ function App() {
           )}
 
           {activeTab === "Career Twin" && (
-            <CareerTwin userId={user.id} refreshKey={dashboardKey} />
+            <CareerTwin userId={user.id} token={user.token} refreshKey={dashboardKey} />
           )}
 
           {activeTab === "Simulator" && <CareerSimulator userId={user.id} />}
@@ -154,7 +154,7 @@ function App() {
             </>
           )}
 
-          {activeTab === "Admin" && <AdminDashboard />}
+          {activeTab === "Admin" && <AdminDashboard token={user.token} />}
         </>
       )}
     </div>
