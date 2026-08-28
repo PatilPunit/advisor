@@ -9,7 +9,7 @@ function StatCard({ label, value }) {
   );
 }
 
-function Dashboard({ userId }) {
+function Dashboard({ userId, token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -21,7 +21,9 @@ function Dashboard({ userId }) {
       setLoading(true);
       setError("");
       try {
-        const response = await fetch(`http://127.0.0.1:8000/dashboard/${userId}`);
+        const response = await fetch(`http://127.0.0.1:8000/dashboard/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!response.ok) {
           const err = await response.json();
           throw new Error(err.detail || "Could not load dashboard");
