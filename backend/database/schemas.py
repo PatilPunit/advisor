@@ -30,6 +30,7 @@ class UserOut(BaseModel):
     career_goal: Optional[str] = None
     role: str
     created_at: datetime
+    access_token: Optional[str] = None
 
     class Config:
         from_attributes = True
