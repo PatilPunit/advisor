@@ -8,7 +8,7 @@ const FACTOR_LABELS = {
   job_match: "Job Match",
 };
 
-function CareerTwin({ userId, refreshKey }) {
+function CareerTwin({ userId, token, refreshKey }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -18,7 +18,9 @@ function CareerTwin({ userId, refreshKey }) {
       setLoading(true);
       setError("");
       try {
-        const response = await fetch(`http://127.0.0.1:8000/career-twin/${userId}`);
+        const response = await fetch(`http://127.0.0.1:8000/career-twin/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const json = await response.json();
         if (!response.ok) throw new Error(json.detail || "Could not load Career Twin");
         setData(json);
