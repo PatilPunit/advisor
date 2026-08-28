@@ -21,14 +21,16 @@ function BarRow({ label, count, maxCount, color }) {
   );
 }
 
-function AdminDashboard() {
+function AdminDashboard({ token }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch("http://127.0.0.1:8000/admin/analytics");
+        const response = await fetch("http://127.0.0.1:8000/admin/analytics", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const json = await response.json();
         if (!response.ok) throw new Error(json.detail || "Could not load admin analytics");
         setData(json);
