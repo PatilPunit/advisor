@@ -40,7 +40,7 @@ function AuthForm({ onLogin }) {
         }
 
         // Auto-login right after successful registration
-        onLogin({ id: data.id, name: data.name });
+        onLogin({ id: data.id, name: data.name, role: data.role, token: data.access_token });
       } else {
         const response = await fetch("http://127.0.0.1:8000/login", {
           method: "POST",
@@ -56,7 +56,7 @@ function AuthForm({ onLogin }) {
           throw new Error(data.message || "Invalid email or password");
         }
 
-        onLogin({ id: data.user_id, name: data.name });
+        onLogin({ id: data.user_id, name: data.name, role: data.role, token: data.access_token });
       }
     } catch (err) {
       setError(err.message || "Could not reach the server. Is the backend running?");
