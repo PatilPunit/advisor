@@ -37,8 +37,8 @@ def test_full_user_journey(client):
     token = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    client.post(f"/users/{uid}/goal", json={"career": "Data Scientist"})
-    client.post(f"/users/{uid}/skills", json={"skill_name": "Python", "completed": True})
+    client.post(f"/users/{uid}/goal", json={"career": "Data Scientist"}, headers=headers)
+    client.post(f"/users/{uid}/skills", json={"skill_name": "Python", "completed": True}, headers=headers)
 
     r = client.get(f"/dashboard/{uid}", headers=headers)
     assert r.status_code == 200
