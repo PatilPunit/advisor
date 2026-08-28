@@ -11,7 +11,7 @@ const CAREER_OPTIONS = [
   "AI Engineer",
 ];
 
-function GoalForm({ userId, currentGoal, onGoalSet }) {
+function GoalForm({ userId, token, currentGoal, onGoalSet }) {
   const [career, setCareer] = useState(currentGoal || CAREER_OPTIONS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,7 +22,7 @@ function GoalForm({ userId, currentGoal, onGoalSet }) {
     try {
       const response = await fetch(`http://127.0.0.1:8000/users/${userId}/goal`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ career }),
       });
       const data = await response.json();
